@@ -1,0 +1,26 @@
+body {
+    background-color: #f8f9fa;
+}
+.navbar {
+    margin-bottom: 20px;
+}
+
+/* ✅ Custom CSS Animation for Fade-In and Fade-Out */
+.fade-in-out {
+    animation: fadeInOut 4s ease forwards; /* Total duration: 4 seconds */
+}
+
+@keyframes fadeInOut {
+    0% {
+        opacity: 0; /* Start invisible */
+    }
+    10% {
+        opacity: 1; /* Fully visible after 10% of the animation (0.4s) */
+    }
+    90% {
+        opacity: 1; /* Stay visible until 90% of the animation (3.6s) */
+    }
+    100% {
+        opacity: 0; /* Fade out completely at the end */
+    }
+}
