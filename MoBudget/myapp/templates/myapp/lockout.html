@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Locked | FinancePro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            --primary-dark: #1e293b;
+            --accent-red: #ef4444;
+        }
+
+        body {
+            background: var(--bg-gradient);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .lockout-card {
+            max-width: 480px;
+            width: 100%;
+            background: #ffffff;
+            border: none;
+            border-radius: 1.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+
+        .card-header-visual {
+            background-color: #fff1f2;
+            padding: 3rem 2rem 2rem;
+            text-align: center;
+        }
+
+        .icon-wrapper {
+            width: 90px;
+            height: 90px;
+            background-color: white;
+            color: var(--accent-red);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            font-size: 3rem;
+            box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.2);
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .btn-primary-dark {
+            background-color: var(--primary-dark);
+            color: white;
+            border: none;
+            padding: 0.8rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary-dark:hover {
+            background-color: #334155;
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .form-control:focus {
+            border-color: var(--primary-dark);
+            box-shadow: 0 0 0 0.25 darkgray;
+        }
+
+        .modal-content {
+            border: none;
+            border-radius: 1.25rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card lockout-card">
+        <div class="card-header-visual">
+            <div class="icon-wrapper">
+                <i class="bi bi-shield-lock"></i>
+            </div>
+        </div>
+
+        <div class="card-body p-4 p-md-5 pt-0 text-center">
+            <h2 class="fw-bold text-dark mb-3">Too Many Attempts</h2>
+            <p class="text-muted mb-4">
+                Your account access has been restricted because of <strong>4 failed login attempts</strong>. This is a standard security measure to protect your data.
+            </p>
+
+            <div class="alert alert-light border d-flex align-items-center justify-content-center mb-4 py-3">
+                <i class="bi bi-clock-history me-2 text-warning fs-4"></i>
+                <span class="text-dark fw-medium">Locked for: <strong>60 Minutes</strong></span>
+            </div>
+
+            <div class="d-grid gap-2">
+                <a href="{% url 'expenses:login' %}" class="btn btn-primary-dark">
+                    <i class="bi bi-house-door me-2"></i>Back to Login
+                </a>
+                <button class="btn btn-link text-secondary text-decoration-none mt-2" data-bs-toggle="modal" data-bs-target="#contactModal">
+                    <i class="bi bi-envelope-at me-1"></i> Contact Support
+                </button>
+            </div>
+        </div>
+        
+        <div class="card-footer bg-light border-0 py-3 text-center">
+            <small class="text-muted">FinancePro Security Management System</small>
+        </div>
+    </div>
+
+    <div class="modal fade" id="contactModal" tabindex="-1" aria-labelledby="contactModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content shadow-lg">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold" id="contactModalLabel">Support Request</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form action="{% url 'expenses:contact_admin' %}" method="POST">
+                    {% csrf_token %}
+                    <div class="modal-body">
+                        <p class="text-muted small mb-4">If you believe this lockout is an error, please provide your details below.</p>
+                        
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-uppercase">Email Address</label>
+                            <input type="email" name="email" class="form-control" placeholder="your@email.com" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-uppercase">Describe the Issue</label>
+                            <textarea name="message" class="form-control" rows="4" placeholder="e.g., I forgot my password and tried too many times..." required></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0">
+                        <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Close</button>
+                        <button type="submit" class="btn btn-dark rounded-pill px-4">Send Message</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

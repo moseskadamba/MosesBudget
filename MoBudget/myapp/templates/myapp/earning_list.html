@@ -1,0 +1,725 @@
+{% extends 'myapp/base.html' %}
+
+{% block content %}
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+<script>
+    function exportCSV() {
+        // Collect all filter values
+        const q = document.querySelector('input[name="q"]').value;
+        const source = document.querySelector('select[name="source"]').value;
+        const timeframe = document.querySelector('select[name="timeframe"]').value;
+        const exact_date = document.querySelector('input[name="exact_date"]').value;
+        const start_date = document.querySelector('input[name="start_date"]').value;
+        const end_date = document.querySelector('input[name="end_date"]').value;
+
+        // Construct the Base URL
+        const baseUrl = "{% url 'expenses:export_earnings_csv' %}";
+
+        // Create URLSearchParams object to handle clean URL encoding
+        const params = new URLSearchParams({
+            q: q,
+            source: source,
+            timeframe: timeframe,
+            exact_date: exact_date,
+            start_date: start_date,
+            end_date: end_date
+        });
+
+        // Redirect to download
+        window.location.href = `${baseUrl}?${params.toString()}`;
+    }
+</script>
+<style>
+    body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f4f7f6;
+        color: #2d3436;
+    }
+    .navbar-custom {
+        background-color: #ffffff;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    .navbar-brand { font-weight: 700; color: #0d6efd; }
+
+    /* Dashboard Cards */
+    .stat-card {
+        border: none;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        background: #fff;
+    }
+    .stat-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.05); }
+    .icon-shape {
+        width: 48px;
+        height: 48px;
+        background-color: #eef2ff;
+        color: #4f46e5;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+
+    /* Table & Chart Container */
+    .table-container {
+        background: #fff;
+        border-radius: 12px;
+        padding: 20px;
+        border: 1px solid #e0e0e0;
+        height: 100%;
+    }
+    .table thead th {
+        background-color: #f8f9fa;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 1px;
+        color: #636e72;
+        border: none;
+    }
+    .badge-category {
+        padding: 5px 12px;
+        border-radius: 50px;
+        font-weight: 500;
+        font-size: 0.8rem;
+    }
+    .pagination .page-link {
+        color: #4f46e5;
+        border: 1px solid #e0e0e0;
+        margin: 0 3px;
+        border-radius: 6px;
+    }
+
+    .pagination .page-item.active .page-link {
+        background-color: #4f46e5;
+        border-color: #4f46e5;
+        color: white;
+    }
+
+    .pagination .page-item.disabled .page-link {
+        color: #b2bec3;
+        background-color: #f8f9fa;
+    }
+</style>
+</head>
+<body>
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100;">
+        <div id="successToast" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <span id="toastMessage">Action completed successfully!</span>
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="modal" data-bs-target="#successToast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+    <div class="container-fluid py-4">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body">
+                <form method="GET" id="filterForm" class="row g-3 align-items-end">
+                    <div class="col-lg-3 col-md-4">
+                        <select name="source" class="form-select border-0 bg-light">
+                            <option value="">All Sources</option>
+                            {% for src in sources %}
+                                <option value="{{ src.id }}" {% if request.GET.source == src.id|stringformat:"i" %}selected{% endif %}>{{ src.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-lg-3 col-md-4">
+                        <select name="timeframe" id="timeframeSelect" class="form-select border-0 bg-light">
+                            <option value="all">All Time</option>
+                            <option value="today" {% if request.GET.timeframe == 'today' %}selected{% endif %}>Today</option>
+                            <option value="this_week" {% if request.GET.timeframe == 'this_week' %}selected{% endif %}>This Week (Mon-Sun)</option>
+                            <option value="month" {% if timeframe == 'month' or not timeframe %}selected{% endif %}>This Month</option>
+                            <option value="year" {% if request.GET.timeframe == 'year' %}selected{% endif %}>This Year</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold">Pick Specific Date</label>
+                        <input type="date" name="exact_date" id="exactDateInput" class="form-select" value="{{ request.GET.exact_date }}">
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold">From</label>
+                        <input type="date" name="start_date" id="startDateInput" class="form-select" value="{{ request.GET.start_date }}">
+                    </div>
+
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold">To</label>
+                        <input type="date" name="end_date" id="endDateInput" class="form-select" value="{{ request.GET.end_date }}">
+                    </div>
+
+                    <div class="col-md-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary px-4">Filter</button>
+                        <button type="button" onclick="exportCSV()" class="btn btn-outline-success w-100">ExportCSV</button>
+                        <a href="{% url 'expenses:earning_list' %}" class="btn btn-outline-secondary w-100">Reset</a>
+                    </div>
+
+                </form>
+            </div>
+        </div>
+        <div class="row mb-4">
+            <div class="col-md-4 mb-3">
+                <div class="card stat-card shadow-sm">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="icon-shape me-3">💰</div>
+                        <div>
+                            <p class="text-muted mb-0 small uppercase">Filtered Total</p>
+                            <h3 class="fw-bold mb-0">Ksh {{ total|floatformat:2 }}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card stat-card shadow-sm">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="icon-shape me-3">💰</div>
+                        <div>
+                            <p class="text-muted mb-0 small uppercase">This Week Total</p>
+                            <h3 class="fw-bold mb-0">Ksh {{ week_total|floatformat:2 }}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row mb-5">
+            <div class="col-lg-8 mb-4">
+                <div class="table-container shadow-sm">
+                    <div class="card-header bg-white py-3">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <h5 class="mb-0 fw-bold">Recent Transactions</h5>
+                            </div>
+                            <div class="col-md-4">
+                                <form method="GET">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text bg-light border-0"><i class="bi bi-search"></i></span>
+                                        <input type="text" name="q" id="searchInput" class="form-control bg-light border-0" placeholder="Search description..." value="{{ search_query }}">
+                                    </div>
+                                </form>
+                            </div>
+                            <div class="col">
+                                <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addIncomeModal">
+                                    <i class="bi bi-plus-lg"></i> Add Earning
+                                </button>
+                            </div>
+
+                        </div>
+                    </div>
+                    <div id="transaction-list">
+
+                        {% if earnings.object_list %}
+
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead class="bg-light">
+                                            <tr class="small text-uppercase text-muted">
+                                                <th class="ps-4">Date</th>
+                                                <th>Source</th>
+                                                <th>Description</th>
+                                                <th>Status</th>
+                                                <th>Amount</th>
+                                                <th class="text-end pe-4">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for earning in earnings %}
+                                            <tr>
+                                                <td class="ps-4 text-muted small">{{ earning.date|date:"M d, Y" }}</td>
+                                                <td>
+                                                    <span class="badge rounded-pill bg-info-subtle text-info px-3">
+                                                        {{ earning.source.name|default:"Source" }}
+                                                    </span>
+                                                </td>
+                                                <td><span class="fw-semibold">{{ earning.description|truncatechars:30|default:"—" }}</span></td>
+                                                <td>
+                                                    <select class="form-select form-select-sm status-dropdown border-0 shadow-none rounded-pill
+                                                        {% if earning.status == 'paid' %}bg-success-subtle text-success
+                                                        {% elif earning.status == 'accepted' %}bg-primary-subtle text-primary
+                                                        {% elif earning.status == 'in_review' %}bg-info-subtle text-info
+                                                        {% else %}bg-warning-subtle text-warning{% endif %}"
+                                                        data-url="{% url 'expenses:update_earning_status' earning.pk %}"  style="width: 110px; cursor: pointer; font-size: 0.75rem; font-weight: 600;">
+
+                                                        <option value="in_progress" {% if earning.status == 'in_progress' %}selected{% endif %}>Pending</option>
+                                                        <option value="in_review" {% if earning.status == 'in_review' %}selected{% endif %}>Review</option>
+                                                        <option value="accepted" {% if earning.status == 'accepted' %}selected{% endif %}>Accepted</option>
+                                                        <option value="paid" {% if earning.status == 'paid' %}selected{% endif %}>Paid</option>
+                                                    </select>
+                                                </td>
+                                                <td><span class="text-success fw-bold">${{ earning.amount }}</span></td>
+                                                <td class="text-end pe-4">
+                                                    <div class="btn-group">
+                                                        <button type="button"
+                                                                class="btn btn-sm btn-outline-success"
+                                                                data-bs-toggle="modal"
+                                                                data-bs-target="#editEarningModal"
+                                                                data-url="{% url 'expenses:edit_earning' earning.pk %}"
+                                                                data-description="{{ earning.description|default:'' }}"
+                                                                data-amount="{{ earning.amount }}"
+                                                                data-source="{{ earning.source.id }}"
+                                                                data-status="{{ earning.status }}"
+                                                                data-date="{{ earning.date|date:'Y-m-d' }}">
+                                                            <i class="bi bi-pencil"></i>
+                                                        </button>
+                                                        <form method="post" action="{% url 'expenses:delete_earning' earning.pk %}" class="d-inline">
+                                                            {% csrf_token %}
+                                                            <button type="button"
+                                                                    class="btn btn-sm btn-outline-danger open-delete-modal"
+                                                                    data-bs-toggle="modal"
+                                                                    data-bs-target="#deleteModal"
+                                                                    data-url="{% url 'expenses:delete_earning' earning.pk %}"
+                                                                    data-description="{{ earning.description }}">
+                                                                    <i class="bi bi-trash"></i>
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="text-center py-5">
+                                <p class="text-muted">No earnings found for this selection.</p>
+                            </div>
+                        {% endif %}
+                        <div class="card-footer bg-white py-3">
+                            <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+                                {% if earnings.has_other_pages %}
+                                    <nav aria-label="Page navigation" class="mt-4">
+                                        <ul class="pagination justify-content-center shadow-sm">
+                                            {% if earnings.has_previous %}
+                                                <li class="page-item">
+                                                    <a class="page-link" href="?page={{ earnings.previous_page_number }}&source={{ request.GET.source }}&timeframe={{ request.GET.timeframe }}&per_page={{ per_page }}&exact_date={{ request.GET.exact_date }}&start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}" aria-label="Previous">
+                                                        <span aria-hidden="true">&laquo; Previous</span>
+                                                    </a>
+                                                </li>
+                                            {% else %}
+                                                <li class="page-item disabled">
+                                                    <span class="page-link">&laquo; Previous</span>
+                                                </li>
+                                            {% endif %}
+                                            <li class="page-item active">
+                                                <span class="page-link">
+                                                    Page {{ earnings.number }} of {{ earnings.paginator.num_pages }}
+                                                </span>
+                                            </li>
+                                            {% if earnings.has_next %}
+                                                <li class="page-item">
+                                                    <a class="page-link" href="?page={{ earnings.next_page_number }}&source={{ request.GET.source }}&timeframe={{ request.GET.timeframe }}&per_page={{ per_page }}&exact_date={{ request.GET.exact_date }}&start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}" aria-label="Next">
+                                                        <span aria-hidden="true">Next &raquo;</span>
+                                                    </a>
+                                                </li>
+                                            {% else %}
+                                                <li class="page-item disabled">
+                                                    <span class="page-link">Next &raquo;</span>
+                                                </li>
+                                            {% endif %}
+                                        </ul>
+                                    </nav>
+                                {% endif %}
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold">Items per page</label>
+                                    <select name="per_page" class="form-select" form="filterForm" onchange="this.form.submit()">
+                                        <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+                                        <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                                        <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 mb-4">
+                <div class="table-container shadow-sm text-center">
+                    <h5 class="fw-bold mb-4">Earning Analysis</h5>
+                    {% if chart_values %}
+                    <div style="position: relative; height: 350px; width: 100%;">
+                        <canvas id="earningChart"></canvas>
+                    </div>
+                    {% else %}
+                    <div class="py-5">
+                        <p class="text-muted">No data available for the chart.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-danger text-white border-0">
+                    <h5 class="modal-title fw-bold" id="deleteModalLabel">Confirm Deletion</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body py-4 text-center">
+                    <p class="mb-1 text-muted">Are you sure you want to delete:</p>
+                    <h5 id="modal-earning-description" class="fw-bold text-dark"></h5>
+                    <p class="text-danger small mt-3">This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer border-0 pb-4 justify-content-center">
+                    <button type="button" class="btn btn-light px-4" data-bs-dismiss="modal">Cancel</button>
+                    <form id="delete-confirm-form" method="post" action="">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger px-4">Delete Permanently</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="editEarningModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 20px;">
+            <div class="modal-header border-0 pt-4 px-4">
+                <h4 class="fw-bold">Edit Earning</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form method="post" action="" id="editEarningForm">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Date Received</label>
+                        <input type="date" name="date" id="editEarnDate" class="form-control border-2 shadow-none" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Description</label>
+                        <input type="text" name="description" id="editEarnDescription" class="form-control border-2 shadow-none">
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Source</label>
+                            <select name="source" id="editEarnSource" class="form-select border-2 shadow-none">
+                                {% for src in sources %}
+                                    <option value="{{ src.id }}">{{ src.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-muted text-uppercase">Amount</label>
+                                <input type="number" step="0.01" name="amount" id="editEarnAmount" class="form-control border-2 shadow-none" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-muted text-uppercase">Status</label>
+                                <select name="status" id="editEarnStatus" class="form-select border-2 shadow-none">
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="in_review">In Review</option>
+                                    <option value="accepted">Accepted</option>
+                                    <option value="paid">Paid</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-success btn-lg w-100 fw-bold mt-2">Update Earning</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+    {% include 'myapp/add_earning.html' %}
+</body>
+    <script>
+        // Helper function to generate a palette of colors
+        function generatePalette(count) {
+            const colors = [];
+            for (let i = 0; i < count; i++) {
+                // This creates colors distributed evenly around the color wheel (HSL)
+                // Hue is 0-360, Saturation 70%, Lightness 60% for a "Pro" look
+                colors.push(`hsl(${(i * 360) / count}, 70%, 60%)`);
+            }
+            return colors;
+        }
+
+        const ctx = document.getElementById('earningChart').getContext('2d');
+        const labelCount = {{ chart_labels|safe }}.length; // Get the number of categories
+
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: {{ chart_labels|safe }},
+                datasets: [{
+                    data: {{ chart_values|safe }},
+                    // Dynamically generate the exact number of colors needed
+                    backgroundColor: generatePalette(labelCount),
+                    borderColor: '',
+                    borderWidth: 2
+                }]
+            },
+            plugins: [ChartDataLabels],
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 20
+                        }
+                    },
+                    datalabels: {
+                        color: '#fff',
+                        font: { weight: 'bold' },
+                        formatter: (value, ctx) => {
+                            let sum = 0;
+                            let dataArr = ctx.chart.data.datasets[0].data;
+                            dataArr.map(data => sum += data);
+                            return (value * 100 / sum).toFixed(1) + "%";
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+
+    <script>
+        const timeframeSelect = document.getElementById('timeframeSelect');
+        const exactDateInput = document.getElementById('exactDateInput');
+        const startDateInput = document.getElementById('startDateInput');
+        const endDateInput = document.getElementById('endDateInput');
+
+        // If user picks a Preset Timeframe, clear all custom dates
+        timeframeSelect.addEventListener('change', function() {
+            if (this.value !== 'all') {
+                exactDateInput.value = '';
+                startDateInput.value = '';
+                endDateInput.value = '';
+            }
+        });
+
+        // If user picks an Exact Date, clear Timeframe and Ranges
+        exactDateInput.addEventListener('change', function() {
+            if (this.value !== '') {
+                timeframeSelect.value = 'all';
+                startDateInput.value = '';
+                endDateInput.value = '';
+            }
+        });
+
+        // If user picks a Range, clear Timeframe and Exact Date
+        [startDateInput, endDateInput].forEach(input => {
+            input.addEventListener('change', function() {
+                if (startDateInput.value !== '' || endDateInput.value !== '') {
+                    timeframeSelect.value = 'all';
+                    exactDateInput.value = '';
+                }
+            });
+        });
+        startDateInput.addEventListener('change', function() {
+            // Prevent the user from picking a 'To' date before the 'From' date
+            endDateInput.min = this.value;
+        });
+        function validateDates() {
+            const start = new Date(startDateInput.value);
+            const end = new Date(endDateInput.value);
+
+            // Only validate if both dates are filled in
+            if (startDateInput.value && endDateInput.value) {
+                if (end < start) {
+                    alert("The 'To' date cannot be earlier than the 'From' date.");
+                    endDateInput.value = ''; // Clear the invalid date
+                }
+            }
+
+        }
+    </script>
+    <script>
+        document.addEventListener('click', function (e) {
+            // Check if the clicked element is a pagination link
+            if (e.target.closest('.pagination a')) {
+                e.preventDefault(); // Stop the page from reloading
+
+                const url = e.target.closest('a').href;
+
+                // Fetch the new data
+                fetch(url, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest' // Tell Django this is an AJAX request
+                    }
+                })
+                .then(response => response.text())
+                .then(html => {
+                    // Create a temporary element to parse the HTML string
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+
+                    // Find the new table content in the response
+                    const newContent = doc.getElementById('transaction-list').innerHTML;
+
+                    // Replace the old table content with the new one
+                    document.getElementById('transaction-list').innerHTML = newContent;
+
+                    // Optional: Smoothly scroll back to the top of the table
+                    document.getElementById('transaction-list').scrollIntoView({ behavior: 'smooth' });
+                })
+                .catch(error => console.warn('Error fetching data:', error));
+            }
+        });
+    </script>
+    <script>
+        const searchInput = document.getElementById('searchInput');
+        let debounceTimer;
+
+        searchInput.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+
+            debounceTimer = setTimeout(() => {
+                // Collect all current filter data
+                const source = document.querySelector('select[name="source"]').value;
+                const timeframe = document.querySelector('select[name="timeframe"]').value;
+                const q = searchInput.value;
+
+                // Construct the URL with all active filters
+                const url = `?q=${q}&source=${source}&timeframe=${timeframe}`;
+
+                // Reuse your existing AJAX logic to update the table
+                fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(response => response.text())
+                .then(html => {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    document.getElementById('transaction-list').innerHTML = doc.getElementById('transaction-list').innerHTML;
+                });
+            }, 300); // Wait 300ms after last keystroke
+        });
+    </script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const deleteModal = document.getElementById('deleteModal');
+
+            deleteModal.addEventListener('show.bs.modal', function(event) {
+                // Button that triggered the modal
+                const button = event.relatedTarget;
+
+                // Extract info from data-* attributes
+                const deleteUrl = button.getAttribute('data-url');
+                const description = button.getAttribute('data-description');
+
+                // Update the modal's content
+                const modalDescription = deleteModal.querySelector('#modal-earning-description');
+                const deleteForm = deleteModal.querySelector('#delete-confirm-form');
+
+                modalDescription.textContent = description || "this earning";
+                deleteForm.setAttribute('action', deleteUrl);
+            });
+        });
+        //this is for success message
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if Django sent a success message
+            {% if messages %}
+                {% for message in messages %}
+                    {% if message.tags == 'success' %}
+                        const toastElement = document.getElementById('successToast');
+                        const toastMessage = document.getElementById('toastMessage');
+
+                        // Update the text and show the toast
+                        toastMessage.textContent = "{{ message }}";
+                        const toast = new bootstrap.Toast(toastElement);
+                        toast.show();
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+        });
+    </script>
+    <script>
+        document.getElementById('addEarningForm').onsubmit = function(e) {
+            e.preventDefault(); // Stop page from refreshing
+
+            const formData = new FormData(this);
+
+            fetch("{% url 'expenses:earning_list' %}", {
+                method: "POST",
+                body: formData,
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest", // Tells Django this is an AJAX request
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // 1. Close the modal
+                    const modalElement = document.getElementById('addIncomeModal');
+                    const modal = bootstrap.Modal.getInstance(modalElement);
+                    modal.hide();
+
+                    // 2. Clear the form
+                    this.reset();
+
+                    // 3. Refresh the page to show new data (or update the table manually)
+                    location.reload();
+                } else {
+                    alert("Error adding earning. Please check the fields.");
+                }
+            })
+            .catch(error => console.error("Error:", error));
+        };
+    </script>
+    <script>
+        document.querySelectorAll('.status-dropdown').forEach(select => {
+            select.addEventListener('change', function() {
+                const updateUrl = this.getAttribute('data-url'); // Grab the dynamic URL
+                const newStatus = this.value;
+                const self = this;
+
+                fetch(updateUrl, {  // Use the dynamic URL here
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': '{{ csrf_token }}',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 'status': newStatus })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        alert("Server error: " + response.status + ". Path might be wrong.");
+                        location.reload();
+                        return;
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data && data.status === 'success') {
+                        // Update CSS classes
+                        self.classList.remove('bg-success-subtle', 'text-success', 'bg-primary-subtle', 'text-primary',
+                                            'bg-info-subtle', 'text-info', 'bg-warning-subtle', 'text-warning');
+
+                        if (newStatus === 'paid') self.classList.add('bg-success-subtle', 'text-success');
+                        else if (newStatus === 'accepted') self.classList.add('bg-primary-subtle', 'text-primary');
+                        else if (newStatus === 'in_review') self.classList.add('bg-info-subtle', 'text-info');
+                        else self.classList.add('bg-warning-subtle', 'text-warning');
+                    }
+                });
+            });
+        });
+    </script>
+    <script>
+        const editEarningModal = document.getElementById('editEarningModal');
+        editEarningModal.addEventListener('show.bs.modal', function(event) {
+            const btn = event.relatedTarget;
+
+            // Set Form Action URL
+            editEarningModal.querySelector('#editEarningForm').setAttribute('action', btn.getAttribute('data-url'));
+
+            // Populate Fields
+            editEarningModal.querySelector('#editEarnDate').value = btn.getAttribute('data-date');
+            editEarningModal.querySelector('#editEarnDescription').value = btn.getAttribute('data-description');
+            editEarningModal.querySelector('#editEarnAmount').value = btn.getAttribute('data-amount');
+
+            // Set Source Dropdown
+            const sourceId = btn.getAttribute('data-source');
+            editEarningModal.querySelector('#editEarnSource').value = sourceId;
+
+            const statusValue = btn.getAttribute('data-status');
+            editEarningModal.querySelector('#editEarnStatus').value = statusValue;
+        });
+    </script>
+{% endblock %}

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinancePro | Master Your Expense & Income</title>
+    {% load static %}
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8f9fa; color: #333; }
+        .navbar-brand { font-weight: 700; color: #0d6efd !important; }
+        .hero-section { padding: 100px 0; background: linear-gradient(135deg, #fff 0%, #e9ecef 100%); }
+        .btn-primary { padding: 12px 30px; border-radius: 8px; font-weight: 600; background-color: #0d6efd; border: none; }
+        .btn-outline-secondary { padding: 12px 30px; border-radius: 8px; }
+        .hero-image { border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }
+        .feature-card { border: none; border-radius: 15px; transition: transform 0.3s; }
+        .feature-card:hover { transform: translateY(-10px); }
+
+        /* Footer Styling */
+        footer { background-color: #ffffff; border-top: 1px solid #dee2e6; }
+        .footer-link { text-decoration: none; color: #6c757d; transition: color 0.2s; }
+        .footer-link:hover { color: #0d6efd; }
+        .footer-logo { font-weight: 700; color: #0d6efd; font-size: 1.25rem; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-light bg-white py-3 shadow-sm sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="#">FinancePro</a>
+            <div class="ms-auto">
+                <a href="{% url 'expenses:login' %}" class="btn btn-link text-decoration-none text-dark fw-bold me-3">Login</a>
+                <a href="{% url 'expenses:signup' %}" class="btn btn-primary">Sign Up Free</a>
+            </div>
+        </div>
+    </nav>
+
+    <header class="hero-section">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-6">
+                    <h1 class="display-3 fw-bold mb-4">Take control of <span class="text-primary">every cent.</span></h1>
+                    <p class="lead text-muted mb-5">Track expenses, set budgets, and see your financial future clearly. Join 50,000+ users saving more every month.</p>
+                    <div class="d-flex gap-3">
+                        <button class="btn btn-primary btn-lg">Start Tracking Now</button>
+                        <button class="btn btn-outline-secondary btn-lg">Watch Demo</button>
+                    </div>
+                </div>
+                <div class="col-lg-6 mt-5 mt-lg-0">
+                    <img src="{% static 'images/welcome-illustration5.png' %}" alt="Dashboard" class="img-fluid hero-image">
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <section class="container my-5 py-5">
+        <div class="row text-center">
+            <div class="col-md-4 mb-4">
+                <div class="card feature-card p-4 bg-white h-100 shadow-sm">
+                    <div class="mb-3"><h3>📊</h3></div>
+                    <h5>Smart Analytics</h5>
+                    <p class="text-muted">Visualize your spending patterns with beautiful, interactive charts.</p>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card feature-card p-4 bg-white h-100 shadow-sm">
+                    <div class="mb-3"><h3>🔒</h3></div>
+                    <h5>Bank-Level Security</h5>
+                    <p class="text-muted">Your data is encrypted and private. We never sell your information.</p>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card feature-card p-4 bg-white h-100 shadow-sm">
+                    <div class="mb-3"><h3>📱</h3></div>
+                    <h5>Sync Anywhere</h5>
+                    <p class="text-muted">Access your budget from your phone, tablet, or desktop instantly.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="pt-5 pb-4">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-4 col-md-6 mb-4 mb-lg-0">
+                    <div class="footer-logo mb-3">SpendWise</div>
+                    <p class="text-muted">Simplifying financial freedom for everyone, everywhere. Tracking expenses has never been this beautiful.</p>
+                    <div class="mt-4">
+                        <a href="#" class="me-3 text-muted">Twitter</a>
+                        <a href="#" class="me-3 text-muted">LinkedIn</a>
+                        <a href="#" class="text-muted">Instagram</a>
+                    </div>
+                </div>
+
+                <div class="col-lg-2 col-md-6 mb-4 mb-lg-0">
+                    <h6 class="fw-bold mb-3">Product</h6>
+                    <ul class="list-unstyled">
+                        <li class="mb-2"><a href="#" class="footer-link">Features</a></li>
+                        <li class="mb-2"><a href="#" class="footer-link">Pricing</a></li>
+                        <li class="mb-2"><a href="#" class="footer-link">Security</a></li>
+                        <li class="mb-2"><a href="#" class="footer-link">Mobile App</a></li>
+                    </ul>
+                </div>
+
+                <div class="col-lg-2 col-md-6 mb-4 mb-lg-0">
+                    <h6 class="fw-bold mb-3">Company</h6>
+                    <ul class="list-unstyled">
+                        <li class="mb-2"><a href="#" class="footer-link">About Us</a></li>
+                        <li class="mb-2"><a href="#" class="footer-link">Careers</a></li>
+                        <li class="mb-2"><a href="#" class="footer-link">Blog</a></li>
+                        <li class="mb-2"><a href="#" class="footer-link">Contact</a></li>
+                    </ul>
+                </div>
+
+                <div class="col-lg-4 col-md-6">
+                    <h6 class="fw-bold mb-3">Stay Updated</h6>
+                    <p class="text-muted small">Get financial tips and product updates.</p>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" placeholder="Email address" aria-label="Email">
+                        <button class="btn btn-primary" type="button">Join</button>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="my-4 text-muted">
+
+            <div class="row align-items-center">
+                <div class="col-md-6 text-center text-md-start">
+                    <small class="text-muted">&copy; 2025 SpendWise Inc. Made by Moses Kadamba with ❤️ All rights reserved.</small>
+                </div>
+                <div class="col-md-6 text-center text-md-end">
+                    <small>
+                        <a href="#" class="footer-link me-3">Privacy Policy</a>
+                        <a href="#" class="footer-link">Terms of Service</a>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

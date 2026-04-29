@@ -1,0 +1,41 @@
+{% extends 'myapp/base.html' %}
+
+{% block content %}
+    <body>
+        <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100;">
+            <div id="successToast" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <span id="toastMessage">Action completed successfully!</span>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="modal" data-bs-target="#successToast" aria-label="Close"></button>
+                </div>
+            </div>
+        </div>
+        <div class="container mt-4">
+            <h2 class="fw-bold mb-4">Account Settings</h2>
+
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body">
+                            <h5>📂 Categories</h5>
+                            <p class="text-muted">Add, edit, or remove expense categories.</p>
+                            <a href="{% url 'expenses:category_list' %}" class="btn btn-primary">Manage Categories</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body">
+                            <h5>🔒 Security</h5>
+                            <p class="text-muted">Update your password to keep your account safe.</p>
+                            <a href="{% url 'expenses:change_password' %}" class="btn btn-outline-primary">Change Password</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+{% endblock %}
