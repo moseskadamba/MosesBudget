@@ -1,0 +1,40 @@
+<body>
+    <div class="modal fade" id="addIncomeModal" tabindex="-1" aria-labelledby="addIncomeModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow" style="border-radius: 20px;">
+                <div class="modal-header border-0 pt-4 px-4 pb-0">
+                    <h3 class="modal-title fw-bold" id="addIncomeModalLabel">
+                        Add Earning
+                    </h3>
+                    <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="card shadow-sm border-0">
+                    <div class="card-body p-4">
+
+                        <form method="POST">
+                            {% csrf_token %}
+                            {% for field in earning_form %}
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">{{ field.label }}</label>
+                                    {{ field }}
+                                    {% if field.errors %}
+                                        <div class="text-danger small">{{ field.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                            <div class="d-grid gap-2 mt-4">
+                                <button type="submit" name="submit_income" class="btn btn-success">Save Earning</button>
+                                <a href="{% url 'expenses:earning_list' %}" class="btn btn-light">Cancel</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+<style>
+    .modal-backdrop { z-index: 1050 !important; }
+    #addIncomeModal { z-index: 1060 !important; }
+</style>

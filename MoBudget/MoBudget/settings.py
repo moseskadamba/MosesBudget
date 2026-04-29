@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -23,14 +24,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-iw*%rb*x9jfc+kc+yj%wt23k(y$v2r11$8@ffwe52-8toklku3'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['MyExpenseTracker.pythonanywhere.com']
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    'admin_interface',
+    'colorfield',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -39,6 +42,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'myapp',
     'widget_tweaks',
+    'django.contrib.humanize',
+    'axes',
 ]
 
 MIDDLEWARE = [
@@ -49,9 +54,35 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'axes.middleware.AxesMiddleware',
 ]
 
+AUTHENTICATION_BACKENDS = [
+    # Axis standard backend
+    'axes.backends.AxesBackend',
+    # Default Django backend
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+AXES_FAILURE_LIMIT = 4               # Limit to 4 attempts
+AXES_COOLOFF_TIME = 1                # Lockout duration in hours
+AXES_LOCKOUT_TEMPLATE = 'myapp/lockout.html' # Optional: custom error page
+AXES_RESET_ON_SUCCESS = True
+# REPLACE the deprecated setting with this:
+# AXES_LOCK_OUT_BY_USER_OR_IP = True
+# Ensure only the specific username is locked
+AXES_ONLY_USER_FAILURES = True
+# Session expires after 3600 seconds (1 hour)
+SESSION_COOKIE_AGE = 1209600
+# Session closes when the browser is closed
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+
+
 ROOT_URLCONF = 'MoBudget.urls'
+# settings.py
+#ADMIN_EMAIL = 'moseskadamba@gmail.com'
+# For development, this prints emails to the console instead of sending them
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 TEMPLATES = [
     {
@@ -100,7 +131,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
@@ -112,13 +142,28 @@ USE_I18N = True
 
 USE_TZ = True
 
+# Media files (user-uploaded files)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'myapp/media')
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
 
+STATICFILES_DIRS=[
+    os.path.join(BASE_DIR, 'myapp/static')]
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+USE_L10N = True
+USE_THOUSAND_SEPARATOR = True
+
+# Tell Django to use your specific login URL
+LOGIN_URL = 'expenses:login'  # Or 'expenses:login' depending on your namespace
+
+# Tell Django where to go after a successful login
+LOGIN_REDIRECT_URL = 'expenses:dashboard'

@@ -1,0 +1,32 @@
+{% extends 'myapp/base.html' %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-5">
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-4">
+                    <h4 class="fw-bold mb-3"><i class="bi bi-plus-circle text-success me-2"></i>New Income Source</h4>
+                    <p class="text-muted small">Create a label for where your money comes from.</p>
+                    <hr>
+                    <form method="POST">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Source Name</label>
+                            {{ form.name }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Description (Optional)</label>
+                            {{ form.description }}
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success">Create Source</button>
+                            <a href="{% url 'expenses:add_income' %}" class="btn btn-light">Back to Earnings</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
