@@ -1,0 +1,164 @@
+{% extends 'myapp/base.html' %}
+
+{% block content %}
+{% load l10n %}
+<div class="container-fluid py-4">
+
+    {% if messages %}
+    <div class="position-fixed top-0 end-0 p-3" style="z-index: 1080; max-width: 350px;">
+        {% for message in messages %}
+            <div class="alert alert-success alert-dismissible fade show border-0 shadow-lg mb-2 d-flex align-items-center p-3" role="alert" style="border-radius: 10px; background-color: #d1e7dd; color: #0f5132;">
+                <i class="bi bi-check-circle-fill me-2 fs-5 text-success"></i>
+                <div class="small fw-semibold pe-4">
+                    {{ message }}
+                </div>
+                <button type="button" class="btn-close small p-3" data-bs-dismiss="alert" aria-label="Close" style="font-size: 0.75rem;"></button>
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">Financial Accounts</h2>
+            <p class="text-muted small mb-0">Monitor your cash reserves, mobile wallets, and asset balances.</p>
+        </div>
+        <button type="button" class="btn btn-primary shadow-sm border-0 px-4 py-2" data-bs-toggle="modal" data-bs-target="#addAccountModal">
+            <i class="bi bi-plus-circle me-2"></i>Link New Account
+        </button>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-4" style="border-radius: 15px; background: linear-gradient(45deg, #0d6efd, #0a58ca);">
+        <div class="card-body p-4 text-white text-center">
+            <h6 class="text-uppercase tracking-wider opacity-75 small fw-bold">Total Liquid Balance Across Accounts</h6>
+            <h1 class="display-4 fw-bold mb-0">Ksh. {{ total_balance|floatformat:2 }}</h1>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm" style="border-radius: 15px;">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-4"><i class="bi bi-wallet2 text-primary me-2"></i>Your Accounts</h5>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Account Name</th>
+                                    <th>Type</th>
+                                    <th class="text-end">Current Balance</th>
+                                    <th class="text-center">Actions</th> </tr>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for acc in accounts %}
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold text-dark">{{ acc.account_name }}</div>
+                                        <span class="text-muted text-xs font-monospace small">Updated: {{ acc.last_updated|date:"M d, H:i" }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border px-2 py-1 small text-capitalize">
+                                            {{ acc.get_account_type_display }}
+                                        </span>
+                                    </td>
+                                    <td class="text-end fw-bold text-success fs-5">
+                                        Ksh. {{ acc.balance|floatformat:2 }}
+                                    </td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-sm btn-light border shadow-sm text-warning" data-bs-toggle="modal" data-bs-target="#editAccountModal-{{ acc.id }}">
+                                            <i class="bi bi-pencil-square"></i>
+                                        </button>
+
+                                        <button type="button" class="btn btn-sm btn-light border shadow-sm text-danger" data-bs-toggle="modal" data-bs-target="#deleteAccountModal-{{ acc.id }}">
+                                            <i class="bi bi-trash3"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+
+                                {% include 'myapp/account_balance_edit_form.html' %}
+                                {% include 'myapp/account_balance_delete_confirm.html' %}
+
+                                {% empty %}
+                                <tr>
+                                    <td colspan="3" class="text-center py-4 text-muted">No accounts configured yet.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm" style="border-radius: 15px;">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-4"><i class="bi bi-clock-history text-primary me-2"></i>Account Activity Log</h5>
+
+                    <div style="max-height: 450px; overflow-y: auto; padding-right: 5px;">
+                        <ul class="list-group list-group-flush">
+                            {% for history in activity_log %}
+                            <li class="list-group-item px-0 py-3 border-0 border-bottom">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <div class="fw-semibold text-dark small">{{ history.account.account_name }}</div>
+                                        <small class="text-muted d-block" style="font-size: 0.75rem;">
+                                            <i class="bi bi-calendar-event me-1"></i>{{ history.updated_at|date:"M d, Y @ H:i" }}
+                                        </small>
+                                    </div>
+                                    <div class="text-end">
+                                        {% if history.difference > 0 %}
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle fw-bold font-monospace">
+                                                Ksh. +{{ history.difference|floatformat:2 }}
+                                            </span>
+                                        {% elif history.difference < 0 %}
+                                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle fw-bold font-monospace">
+                                                Ksh. {{ history.difference|floatformat:2 }}
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-light text-muted border fw-bold font-monospace">
+                                                —
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </li>
+                            {% empty %}
+                            <li class="text-center py-4 text-muted list-unstyled">No structural historical changes logged yet.</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% include 'myapp/account_balance_form.html' %}
+
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Find all alert banners on the page
+        const alerts = document.querySelectorAll('.alert');
+
+        alerts.forEach(function(alert) {
+            // Set a timer for 5000 milliseconds (5 seconds)
+            setTimeout(function() {
+                // Use Bootstrap's native fade effects if available
+                alert.classList.remove('show');
+                alert.classList.add('fade');
+
+                // Carefully remove the element from the DOM completely after the fade transitions animation finishes
+                setTimeout(function() {
+                    alert.remove();
+                }, 300); // Wait 300ms for the CSS fade animation to finish
+
+            }, 5000);
+        });
+    });
+</script>
+
+{% endblock %}

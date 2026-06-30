@@ -1,0 +1,51 @@
+<div class="modal fade" id="addAccountModal" tabindex="-1" aria-labelledby="addAccountModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow" style="border-radius: 15px;">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="addAccountModalLabel">
+                    <i class="bi bi-bank text-primary me-2"></i>Add New Account
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body py-3">
+                <p class="text-muted small mb-4">Set up an account or mobile wallet to track your available balances.</p>
+                
+                <form method="POST" action="{% url 'expenses:account_balances' %}" novalidate>
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">Account Name</label>
+                        {{ form.account_name }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">Account Type</label>
+                        {{ form.account_type }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">Current Balance (Amount)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light">Ksh</span>
+                            {{ form.balance }}
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-medium">Notes</label>
+                        {{ form.notes }}
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary px-4 py-2 w-100 shadow-sm">
+                            <i class="bi bi-check-circle me-2"></i>Save Account
+                        </button>
+                        <button type="button" class="btn btn-light px-4 py-2 w-100 text-muted border" data-bs-dismiss="modal">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

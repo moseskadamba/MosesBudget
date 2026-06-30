@@ -1,41 +1,116 @@
 {% extends 'myapp/base.html' %}
 
 {% block content %}
-    <body>
-        <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100;">
-            <div id="successToast" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
-                <div class="d-flex">
-                    <div class="toast-body">
-                        <span id="toastMessage">Action completed successfully!</span>
-                    </div>
-                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="modal" data-bs-target="#successToast" aria-label="Close"></button>
-                </div>
-            </div>
-        </div>
-        <div class="container mt-4">
-            <h2 class="fw-bold mb-4">Account Settings</h2>
+<div class="container-fluid py-4 max-width-800" style="max-width: 800px;">
+    
+    <h2 class="mb-4 fw-bold text-dark"><i class="bi bi-gear-fill me-2 text-secondary"></i>Account Settings</h2>
 
-            <div class="row g-4">
-                <div class="col-md-6">
-                    <div class="card h-100 border-0 shadow-sm">
-                        <div class="card-body">
-                            <h5>📂 Categories</h5>
-                            <p class="text-muted">Add, edit, or remove expense categories.</p>
-                            <a href="{% url 'expenses:category_list' %}" class="btn btn-primary">Manage Categories</a>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-md-6">
-                    <div class="card h-100 border-0 shadow-sm">
-                        <div class="card-body">
-                            <h5>🔒 Security</h5>
-                            <p class="text-muted">Update your password to keep your account safe.</p>
-                            <a href="{% url 'expenses:change_password' %}" class="btn btn-outline-primary">Change Password</a>
-                        </div>
-                    </div>
-                </div>
+    <!-- Display Messages Alerts -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show shadow-sm border-0 mb-4" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
+        {% endfor %}
+    {% endif %}
+
+    <!-- Navigation Framework Tabs Handles -->
+    <ul class="nav nav-tabs border-bottom mb-4" id="settingsTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if active_tab == 'profile' %}active fw-bold{% endif %} px-4 py-3" id="profile-tab" data-bs-toggle="tab" data-bs-target="#profile-panel" type="button" role="tab">
+                <i class="bi bi-person-circle me-2"></i>Profile Information
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if active_tab == 'security' %}active fw-bold{% endif %} px-4 py-3" id="security-tab" data-bs-toggle="tab" data-bs-target="#security-panel" type="button" role="tab">
+                <i class="bi bi-shield-lock-fill me-2"></i>Security & Password
+            </button>
+        </li>
+    </ul>
+
+    <!-- Panels Storage Container -->
+    <div class="tab-content card border-0 shadow-sm rounded-4 p-4" id="settingsTabContent">
+        
+        <!-- PROFILE TAB PANEL -->
+        <div class="tab-pane fade {% if active_tab == 'profile' %}show active{% endif %}" id="profile-panel" role="tabpanel" aria-labelledby="profile-tab">
+            <h4 class="mb-3 fw-bold text-dark">Personal Details</h4>
+            <p class="text-muted small mb-4">Manage your account basic identity details and contact email registration information points.</p>
+            
+            <form method="POST" action="{% url 'expenses:settings' %}" novalidate>
+                {% csrf_token %}
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold text-secondary">First Name</label>
+                        {{ profile_form.first_name }}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold text-secondary">Last Name</label>
+                        {{ profile_form.last_name }}
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold text-secondary">Email Address</label>
+                        {{ profile_form.email }}
+                    </div>
+                </div>
+                <button type="submit" name="update_profile" class="btn btn-primary fw-bold px-4 py-2">
+                    Save Changes
+                </button>
+            </form>
         </div>
-    </body>
+
+        <!-- SECURITY TAB PANEL -->
+        <div class="tab-pane fade {% if active_tab == 'security' %}show active{% endif %}" id="security-panel" role="tabpanel" aria-labelledby="security-tab">
+            <h4 class="mb-3 fw-bold text-dark">Update Password</h4>
+            <p class="text-muted small mb-4">Ensure your online credentials remain entirely safe by using unique combination values.</p>
+            
+            <form method="POST" action="{% url 'expenses:settings' %}" novalidate>
+                {% csrf_token %}
+                
+                <div class="vstack gap-3 mb-4 max-width-500" style="max-width: 500px;">
+                    {% for field in password_form %}
+                        <div>
+                            <label class="form-label small fw-bold text-secondary">{{ field.label }}</label>
+                            <!-- Programmatically style Django's native fields with bootstrap inputs -->
+                            <input type="{{ field.field.widget.input_type }}" 
+                                   name="{{ field.html_name }}" 
+                                   class="form-control {% if field.errors %}is-invalid{% endif %}" required>
+                            {% for error in field.errors %}
+                                <div class="invalid-feedback d-block fw-semibold small mt-1">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                </div>
+                
+                <button type="submit" name="change_password" class="btn btn-warning text-dark fw-bold px-4 py-2">
+                    Update Password
+                </button>
+            </form>
+        </div>
+        
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        // Find all alert banners on the page
+        const alerts = document.querySelectorAll('.alert');
+        
+        alerts.forEach(function (alertElement) {
+            // Wait 2000 milliseconds (2 seconds) before running the close function
+            setTimeout(function () {
+                // Check if the Bootstrap script is active and available
+                if (typeof bootstrap !== 'undefined' && bootstrap.Alert) {
+                    const bsAlert = new bootstrap.Alert(alertElement);
+                    bsAlert.close();
+                } else {
+                    // Fallback if Bootstrap's JS isn't fully initialized: hide it via CSS
+                    alertElement.style.transition = "opacity 0.5s ease";
+                    alertElement.style.opacity = "0";
+                    setTimeout(() => alertElement.remove(), 500);
+                }
+            }, 2000);
+        });
+    });
+</script>
 {% endblock %}

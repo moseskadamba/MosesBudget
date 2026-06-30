@@ -2,7 +2,7 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth.models import User
-from .models import Expense, Category, Earning, Source
+from .models import Expense, Category, Earning, Source, AccountBalance
 
 class RegisterForm(UserCreationForm):
     first_name = forms.CharField(max_length=30, required=True)
@@ -17,6 +17,15 @@ class LoginForm(AuthenticationForm):
     class Meta:
         model = User
         fields = ["username", "password"]
+
+class UserProfileForm(forms.ModelForm):
+    email = forms.EmailField(required=True, widget=forms.TextInput(attrs={'class': 'form-control'}))
+    first_name = forms.CharField(required=False, widget=forms.TextInput(attrs={'class': 'form-control'}))
+    last_name = forms.CharField(required=False, widget=forms.TextInput(attrs={'class': 'form-control'}))
+
+    class Meta:
+        model = User
+        fields = ['first_name', 'last_name', 'email']
 
 class ExpenseForm(forms.ModelForm):
     class Meta:
@@ -104,4 +113,30 @@ class SourceForm(forms.ModelForm):
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Salary, Side Hustle'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Optional details...'}),
+        }
+
+class AccountBalanceForm(forms.ModelForm):
+    class Meta:
+        model = AccountBalance
+        # We exclude 'user' because we will assign it automatically in the view
+        fields = ['account_name', 'account_type', 'balance', 'notes']
+
+        widgets = {
+            'account_name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., KCB Checking, M-Pesa Wallet'
+            }),
+            'account_type': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'balance': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'placeholder': '0.00',
+                'step': '0.01'
+            }),
+            'notes': forms.Textarea(attrs={
+                'class': 'form-control',
+                'placeholder': 'Optional account details...',
+                'rows': 3
+            }),
         }
