@@ -128,6 +128,12 @@
             <a href="{% url 'expenses:dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
                 <i class="bi bi-grid-1x2-fill"></i> Dashboard
             </a>
+            <a href="{% url 'expenses:account_dashboard_main' %}" class="nav-link {% if request.resolver_match.url_name == 'account_dashboard_main' %}active{% endif %}">
+                <i class="bi bi-bank"></i> A/c Balances
+            </a>
+            <a href="{% url 'expenses:daily_ledger' %}" class="nav-link {% if request.resolver_match.url_name == 'daily_ledger' %}active{% endif %}">
+                <i class="bi bi-bank"></i> Daily Ledger
+            </a>
             <a href="{% url 'expenses:home' %}" class="nav-link d-flex justify-content-between align-items-center {% if request.resolver_match.url_name in 'home,add_expense' %}active fw-bold text-white{% endif %}">
                 <span><i class="bi bi-cart-dash"></i> Expenses</span>
             </a>
@@ -160,8 +166,8 @@
                 </div>
             </div>
             <hr class="mx-3">
-            <a href="{% url 'expenses:change_password' %}" class="nav-link {% if request.resolver_match.url_name == 'change_password' %}active{% endif %}">
-                <i class="bi bi-gear"></i> Change Password
+            <a href="{% url 'expenses:settings' %}" class="nav-link {% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
+                <i class="bi bi-gear"></i> Settings
             </a>
             <a href="{% url 'expenses:logout' %}" class="text-danger nav-link {% if request.resolver_match.url_name == 'logout' %}active{% endif %}">
                 <i class="bi bi-box-arrow-right"></i> Logout

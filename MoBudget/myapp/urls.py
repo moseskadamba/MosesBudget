@@ -46,11 +46,15 @@ urlpatterns = [
     path('categories/edit/<int:pk>/', views.edit_category, name='edit_category'),
     path('categories/delete/<int:pk>/', views.delete_category, name='delete_category'),
 
-    path('settings/', views.settings_hub, name='settings'),
-    path('settings/password/', views.MyPasswordChangeView.as_view(), name='change_password'),
-    path('settings/password/done/',
-         auth_views.PasswordChangeDoneView.as_view(template_name='myapp/password_change_done.html'),
-         name='password_change_done'),
+    #Account balances
+    path('accounts/', views.account_dashboard, name='account_dashboard_main'),
+    path('accounts/add/', views.add_account_balance, name='account_balances'),
+    path('accounts/edit/<int:pk>/', views.edit_account_balance, name='edit_account_balance'),
+    path('accounts/delete/<int:pk>/', views.delete_account_balance, name='delete_account_balance'),
+    path('accounts/ledger/', views.daily_balance_ledger, name='daily_ledger'),
+    path('accounts/ledger/export/', views.export_ledger_csv, name='export_ledger_csv'),
+
+    path('settings/', views.user_settings, name='settings'),
 
     path('reports/expenses/', views.expense_reports, name='expense_reports'),
     path('reports/earnings/', views.earning_reports, name='earning_reports'),

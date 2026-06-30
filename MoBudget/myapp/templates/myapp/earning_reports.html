@@ -6,7 +6,7 @@
         <h2 class="fw-bold">Earnings Reports</h2>
 
         <div class="d-flex gap-2 mb-4 flex-wrap">
-            <a href="{% url 'expenses:report_earnings_csv' %}?filter={{ filter_type }}&status={{ status_filter }}&year={{ year_filter }}&month={{ month_filter }}"
+            <a href="{% url 'expenses:report_earnings_csv' %}?filter={{ filter_type }}&status={{ status_filter }}&year={{ year_filter|default:'' }}&month={{ month_filter|default:'' }}"
                class="btn btn-outline-success shadow-sm border-0 px-3 py-2">
                 <i class="bi bi-file-earmark-spreadsheet me-2"></i> Export CSV
             </a>
@@ -25,6 +25,7 @@
 
             <div class="dropdown">
                 <button class="btn btn-white shadow-sm border-0 dropdown-toggle px-4 py-2" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-calendar3 me-2 text-primary"></i>
                     View: {{ filter_type|capfirst }}
                 </button>
                 <ul class="dropdown-menu shadow border-0">
@@ -34,14 +35,20 @@
                     <li><a class="dropdown-item" href="?filter=yearly&status={{ status_filter }}">Yearly</a></li>
                 </ul>
             </div>
+
             <div class="dropdown">
                 <button class="btn btn-white shadow-sm border-0 dropdown-toggle px-4 py-2" type="button" data-bs-toggle="dropdown">
-                    Year: {{ year_filter|default:"All"|stringformat:"d" }}
+                    Year: {% if year_filter %}{{ year_filter }}{% else %}All{% endif %}
                 </button>
                 <ul class="dropdown-menu shadow border-0">
                     <li><a class="dropdown-item" href="?filter={{ filter_type }}&status={{ status_filter }}">All Years</a></li>
                     {% for y in years %}
-                    <li><a class="dropdown-item" href="?filter={{ filter_type }}&status={{ status_filter }}&year={{ y }}">{{ y|stringformat:"d" }}</a></li>
+                    <li>
+                        <a class="dropdown-item {% if year_filter == y %}active fw-bold{% endif %}"
+                           href="?filter={{ filter_type }}&year={{ y }}">
+                            {{ y }}
+                        </a>
+                    </li>
                     {% endfor %}
                 </ul>
             </div>
@@ -49,15 +56,30 @@
             {% if filter_type != 'yearly' %}
             <div class="dropdown">
                 <button class="btn btn-white shadow-sm border-0 dropdown-toggle px-4 py-2" type="button" data-bs-toggle="dropdown">
-                    Month: {% if month_filter %}{{ month_filter }}{% else %}All{% endif %}
+                    Month:
+                    {% if month_filter %}
+                        {% for m_num, m_name in months %}
+                            {% if month_filter|stringformat:"s" == m_num|stringformat:"s" %}{{ m_name }}{% endif %}
+                        {% endfor %}
+                    {% else %}
+                        All
+                    {% endif %}
                 </button>
-                <ul class="dropdown-menu shadow border-0" style="max-height: 300px; overflow-y: auto;">
-                    <li><a class="dropdown-item" href="?filter={{ filter_type }}&status={{ status_filter }}&year={{ year_filter }}">All Months</a></li>
-                    {% for m in months %}
-                    <li><a class="dropdown-item" href="?filter={{ filter_type }}&status={{ status_filter }}&year={{ year_filter }}&month={{ m }}">Month {{ m }}</a></li>
+                <ul class="dropdown-menu border-0 shadow" style="max-height: 300px; overflow-y: auto;">
+                    <li><a class="dropdown-item" href="?filter={{ filter_type }}&year={{ year_filter|default:'' }}">All Months</a></li>
+
+                    <!-- Loop through our tuple pairs: m.0 is the number (1), m.1 is the name (January) -->
+                    {% for m_num, m_name in months %}
+                    <li>
+                        <a class="dropdown-item {% if month_filter|stringformat:'s' == m_num|stringformat:'s' %}active fw-bold{% endif %}"
+                           href="?filter={{ filter_type }}&year={{ year_filter|default:'' }}&month={{ m_num }}">
+                            {{ m_name }}
+                        </a>
+                    </li>
                     {% endfor %}
                 </ul>
             </div>
+
             {% endif %}
             <a href="?" class="btn btn-light shadow-sm border-0 px-3 py-2 text-muted" title="Clear Filters">
                 <i class="bi bi-x-circle"></i>
@@ -77,7 +99,12 @@
             <table class="table table-hover">
                 <thead class="table-light">
                     <tr>
-                        <th>Period</th>
+                        <th>{% if filter_type == 'daily' %}Date
+                            {% elif filter_type == 'weekly' %}Week
+                            {% elif filter_type == 'monthly' %}Month
+                            {% elif filter_type == 'yearly' %}Year
+                            {% endif %}
+                        </th>
                         <th class="text-end">Amount</th>
                     </tr>
                 </thead>
@@ -88,7 +115,7 @@
                             {% if filter_type == 'daily' %}
                                 {{ item.period|date:"M d, Y" }}
                             {% elif filter_type == 'weekly' %}
-                                Week of {{ item.period|date:"M d, Y" }}
+                                {{ item.period|date:"d M" }} - {{ item.end_period|date:"d M Y" }}
                             {% elif filter_type == 'monthly' %}
                                 {{ item.period|date:"F Y" }}
                             {% else %}

@@ -1,0 +1,111 @@
+{% extends 'myapp/base.html' %}
+{% load ledger_tags %}
+{% block content %}
+<div class="container-fluid py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">Daily Balance Ledger</h2>
+            <p class="text-muted small mb-0">Historical end-of-day balances and performance tracking matrix.</p>
+        </div>
+        <a href="{% url 'expenses:export_ledger_csv' %}" class="btn btn-outline-secondary btn-sm shadow-sm border px-3 py-2 fw-medium text-dark bg-white">
+            <i class="bi bi-file-earmark-spreadsheet-fill text-success me-2"></i>Export CSV
+        </a>
+    </div>
+
+    <div class="card border-0 shadow-sm" style="border-radius: 15px;">
+        <div class="card-body p-4">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle border">
+                    <thead class="table-light text-secondary small text-uppercase">
+                        <tr>
+                            <th>Date</th>
+                            {% for acc in user_accounts %}
+                                <th class="text-end">{{ acc.account_name }}</th>
+                            {% endfor %}
+                            <th class="text-end text-primary fw-bold">Total Balance</th>
+                            <th class="text-end fw-bold">24h Shift</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in ledger_data %}
+                        <tr>
+                            <td class="fw-bold text-dark font-monospace">
+                                {{ row.date|date:"Y-m-d" }}
+                            </td>
+
+                            {% for acc in user_accounts %}
+                                <td class="text-end font-monospace text-muted">
+                                    Ksh. {{ row.account_values|get_item:acc.id|floatformat:2 }}
+                                </td>
+                            {% endfor %}
+
+                            <td class="text-end fw-bold text-primary font-monospace fs-6">
+                                Ksh. {{ row.day_total|floatformat:2 }}
+                            </td>
+
+                            <td class="text-end font-monospace fw-bold">
+                                {% if row.difference > 0 %}
+                                    <span class="text-success"><i class="bi bi-caret-up-fill me-1"></i>+{{ row.difference|floatformat:2 }}</span>
+                                {% elif row.difference < 0 %}
+                                    <span class="text-danger"><i class="bi bi-caret-down-fill me-1"></i>{{ row.difference|floatformat:2 }}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="{{ user_accounts|length|add:3 }}" class="text-center py-4 text-muted">
+                                No historical tracking data found yet. Try updating your account balances to log active shifts.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if ledger_data.has_other_pages %}
+                <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
+                    <div class="text-muted small">
+                        Showing page <strong>{{ ledger_data.number }}</strong> of {{ ledger_data.paginator.num_pages }}
+                    </div>
+
+                    <nav aria-label="Ledger Page Navigation">
+                        <ul class="pagination pagination-sm mb-0">
+
+                            {% if ledger_data.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page=1" title="First Page"><i class="bi bi-chevron-double-left"></i></a>
+                                </li>
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ ledger_data.previous_page_number }}">Previous</a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-double-left"></i></span></li>
+                                <li class="page-item disabled"><span class="page-link">Previous</span></li>
+                            {% endif %}
+
+                            <li class="page-item active" aria-current="page">
+                                <span class="page-link px-3 fw-bold">{{ ledger_data.number }}</span>
+                            </li>
+
+                            {% if ledger_data.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ ledger_data.next_page_number }}">Next</a>
+                                </li>
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ ledger_data.paginator.num_pages }}" title="Last Page"><i class="bi bi-chevron-double-right"></i></a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled"><span class="page-link">Next</span></li>
+                                <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-double-right"></i></span></li>
+                            {% endif %}
+
+                        </ul>
+                    </nav>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

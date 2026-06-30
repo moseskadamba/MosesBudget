@@ -65,7 +65,7 @@
         <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
             <h5 class="mb-0 fw-bold text-dark">Recent Expenses</h5>
             <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
-                Add Expense
+                <i class="bi bi-plus-lg"></i> Add Expense
             </button>
         </div>
         <div class="card-body p-0">
@@ -92,30 +92,28 @@
                             </td>
                             <td class="fw-bold">Ksh {{ expense.amount }}</td>
                             <td class="text-end pe-4">
-                                <div class="btn-group">
-                                    <button type="button"
-                                        class="btn btn-sm btn-outline-secondary"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#editExpenseModal"
-                                        data-url="{% url 'expenses:edit_expense' expense.pk %}"
-                                        data-description="{{ expense.description|default:'' }}"
-                                        data-amount="{{ expense.amount }}"
-                                        data-category="{{ expense.category.id }}"
-                                        data-date="{{ expense.date|date:'Y-m-d' }}">
-                                    <i class="bi bi-pencil"></i>
+                                <button type="button"
+                                    class="btn btn-sm btn-outline-secondary"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#editExpenseModal"
+                                    data-url="{% url 'expenses:edit_expense' expense.pk %}"
+                                    data-description="{{ expense.description|default:'' }}"
+                                    data-amount="{{ expense.amount }}"
+                                    data-category="{{ expense.category.id }}"
+                                    data-date="{{ expense.date|date:'Y-m-d' }}">
+                                <i class="bi bi-pencil"></i>
                                 </button>
-                                    <form method="post" action="{% url 'expenses:delete_expense_dashboard' expense.pk %}" class="d-inline">
-                                        {% csrf_token %}
-                                        <button type="button"
-                                                class="btn btn-sm btn-outline-danger open-delete-modal"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#deleteModal"
-                                                data-url="{% url 'expenses:delete_expense_dashboard' expense.pk %}"
-                                                data-description="{{ expense.description }}">
-                                                <i class="bi bi-trash"></i>
-                                        </button>
-                                    </form>
-                                </div>
+                                <form method="post" action="{% url 'expenses:delete_expense_dashboard' expense.pk %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-danger open-delete-modal"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#deleteModal"
+                                            data-url="{% url 'expenses:delete_expense_dashboard' expense.pk %}"
+                                            data-description="{{ expense.description }}">
+                                            <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
                             </td>
                         </tr>
                         {% empty %}
@@ -287,6 +285,7 @@
                             <input type="number" step="0.01" name="amount" id="editExpAmount" class="form-control border-2 shadow-none" required>
                         </div>
                     </div>
+                    <input type="hidden" name="next" value="{{ request.path }}">
                     <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold mt-2">Update Expense</button>
                 </form>
             </div>
@@ -336,6 +335,7 @@
                             </div>
                         </div>
                     </div>
+                    <input type="hidden" name="next" value="{{ request.path }}">
                     <button type="submit" class="btn btn-success btn-lg w-100 fw-bold mt-2">Update Earning</button>
                 </form>
             </div>

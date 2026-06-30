@@ -4,6 +4,8 @@ from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
 from decimal import Decimal
 from django.utils import timezone
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 class Category(models.Model):
     # Link category to a specific user
@@ -121,3 +123,46 @@ class Earning(models.Model):
 
     def __str__(self):
         return f"{self.source.name if self.source else 'Income'} - {self.amount} ({self.get_status_display()})"
+
+class AccountBalance(models.Model):
+    ACCOUNT_TYPES = [
+        ('bank', 'Bank Account'),
+        ('mobile_money', 'Mobile Money (e.g., M-Pesa)'),
+        ('cash', 'Cash on Hand'),
+        ('credit', 'Credit Card/Loan'),
+        ('jobs', 'Job Account'),
+    ]
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="balances")
+    account_name = models.CharField(max_length=100)
+    account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPES, default='bank')
+    balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    last_updated = models.DateTimeField(auto_now=True)
+    notes = models.TextField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-balance']
+        unique_together = ['user', 'account_name']
+
+    def __str__(self):
+        return f"{self.account_name} ({self.user.username})"
+
+# NEW: Model to track account historical snapshots
+class AccountHistory(models.Model):
+    account = models.ForeignKey(AccountBalance, on_delete=models.CASCADE, related_name="history")
+    balance_snapshot = models.DecimalField(max_digits=12, decimal_places=2)
+    updated_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+# NEW: Automatically logs data whenever AccountBalance updates
+@receiver(post_save, sender=AccountBalance)
+def create_account_history(sender, instance, created, **kwargs):
+    # This automatically tracks changes when you save via forms or signals
+    AccountHistory.objects.create(
+        account=instance,
+        balance_snapshot=instance.balance
+    )
+
+
+

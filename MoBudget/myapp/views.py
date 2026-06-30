@@ -1,18 +1,19 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth import login, logout
-from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth import login, logout, update_session_auth_hash
+from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
+
 from django.contrib import messages
 from django.contrib import messages as django_messages
 from django.contrib.auth.decorators import login_required
-from .forms import RegisterForm, ExpenseForm, CategoryForm, EarningForm, SourceForm
-from .models import Expense, Category, Earning, Source
+from .forms import RegisterForm, ExpenseForm, CategoryForm, EarningForm, SourceForm, AccountBalanceForm, UserProfileForm
+from .models import Expense, Category, Earning, Source, AccountBalance, AccountHistory
 from django.db.models import Sum, Count
 from django.views.generic import TemplateView
 from datetime import timedelta
 import csv
 from django.http import JsonResponse
 from django.http import HttpResponse
-from django.core.paginator import Paginator
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.utils import timezone
 from django.contrib.auth.views import PasswordChangeView
 from django.urls import reverse_lazy
@@ -23,8 +24,11 @@ from axes.models import AccessAttempt
 from django.contrib.auth.models import User
 import json
 from django.views.decorators.http import require_POST
-from django.db.models.functions import TruncDay, TruncWeek, TruncMonth, TruncYear
+from django.db.models.functions import TruncDay, TruncWeek, TruncMonth, TruncYear, TruncDate
 from django.db.models.functions import ExtractMonth, ExtractYear
+from collections import defaultdict
+import datetime
+import calendar
 
 class WelcomeView(TemplateView):
     template_name = 'myapp/welcome.html'
@@ -52,18 +56,18 @@ def dashboard(request):
     # 2. Calculate Total Spent for THIS MONTH ONLY
     # Filters by the current year and the current month
     monthly_spent = all_expenses.filter(
-        created_at__year=now.year,
-        created_at__month=now.month
+        date__year=now.year,
+        date__month=now.month
     ).aggregate(Sum('amount'))['amount__sum'] or 0
 
     monthly_earning = all_earnings.filter(
-        created_at__year=now.year,
-        created_at__month=now.month
+        date__year=now.year,
+        date__month=now.month
     ).aggregate(Sum('amount'))['amount__sum'] or 0
 
     # 3. Count total categories
     category_count = Category.objects.filter(user=request.user).count()
-    source_count = Source.objects.filter(user=request.user).count
+    source_count = Source.objects.filter(user=request.user).count()
 
     # 4. Get recent expenses (first 5 for the table)
     recent_expenses = all_expenses[:5]
@@ -475,7 +479,6 @@ def add_expense(request):
 
 @login_required
 def edit_expense(request, pk):
-    # Get expense, but ensure it belongs to the logged-in user
     expense = get_object_or_404(Expense, pk=pk, user=request.user)
 
     if request.method == 'POST':
@@ -483,7 +486,13 @@ def edit_expense(request, pk):
         if form.is_valid():
             form.save()
             messages.success(request, 'Expense updated successfully!')
-            return redirect('expenses:home')
+
+            # NEW: Check if a redirect destination was explicitly sent from the popup form
+            next_url = request.POST.get('next')
+            if next_url:
+                return redirect(next_url)
+
+            return redirect('expenses:dashboard')
     else:
         form = ExpenseForm(instance=expense, user=request.user)
 
@@ -812,6 +821,12 @@ def edit_earning(request, pk):
         if form.is_valid():
             form.save()
             messages.success(request, 'Earning updated successfully!')
+
+            # NEW: Check if a redirect destination was explicitly sent from the popup form
+            next_url = request.POST.get('next')
+            if next_url:
+                return redirect(next_url)
+
             return redirect('expenses:earning_list')
     else:
         # Pre-fill the form with existing data
@@ -905,10 +920,12 @@ def update_earning_status(request, pk):
 
 @login_required
 def expense_reports(request):
+    # 1. Capture query parameter filters from the request URL
     filter_type = request.GET.get('filter', 'daily')
     year_filter = request.GET.get('year')
     month_filter = request.GET.get('month')
 
+    # 2. Map the time truncation strategy based on selected granularity
     trunc_map = {
         'daily': TruncDay('date'),
         'weekly': TruncWeek('date'),
@@ -917,21 +934,23 @@ def expense_reports(request):
     }
     trunc_func = trunc_map.get(filter_type, TruncDay('date'))
 
-    # Base Queryset
+    # 3. Build Base Queryset tied strictly to the authenticated user
     expenses_qs = Expense.objects.filter(user=request.user)
 
-    # Apply Year & Month Filters
+    # 4. Conditionally apply Year & Month lookup variations
     if year_filter and year_filter.isdigit():
         expenses_qs = expenses_qs.filter(date__year=year_filter)
     if month_filter and month_filter.isdigit():
         expenses_qs = expenses_qs.filter(date__month=month_filter)
 
-    # NEW: Get items per page from dropdown (default to 10)
+    # 5. Determine the dynamic pagination row count threshold
     per_page = request.GET.get('per_page', '10')
     if not per_page.isdigit():
         per_page = 10
+    else:
+        per_page = int(per_page)
 
-    # Grouping logic
+    # 6. Group metrics by the time period using Django ORM aggregation functions
     report_data = (
         expenses_qs.annotate(period=trunc_func)
         .values('period')
@@ -939,28 +958,46 @@ def expense_reports(request):
         .order_by('-period')
     )
 
-    # Calculate Totals in Ksh
-    total_amount = report_data.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    # 7. Coerce the lazy QuerySet into a standard Python list of dictionaries
+    # This allows us to modify individual entry keys directly without database restrictions
+    report_data = list(report_data)
 
+    # 8. Compute the grand total across all records found using list comprehension
+    total_amount = sum(item['total_amount'] or 0 for item in report_data)
+
+    # 9. Loop over the parsed records to format empty defaults and extend weekly date ranges
     for item in report_data:
         item['total_amount'] = (item['total_amount'] or 0)
 
-    # Get dynamic list of years for the dropdown
-    years = Expense.objects.filter(user=request.user).annotate(y=ExtractYear('date')).values_list('y', flat=True).distinct().order_by('-y')
+        # Calculate trailing weekend offset (+6 days) if weekly mode is engaged
+        if filter_type == 'weekly' and item['period']:
+            item['end_period'] = item['period'] + timedelta(days=6)
 
-    # UPDATED: Use the dynamic per_page value
+    # 10. Extract a clean, distinct list of historical calendar years for select filters
+    years = (
+        Expense.objects.filter(user=request.user)
+        .annotate(y=ExtractYear('date'))
+        .values_list('y', flat=True)
+        .distinct()
+        .order_by('-y')
+    )
+
+    years = [str(y) for y in years]
+
+    # 11. Run the slice operations through the Django Paginator engine
     paginator = Paginator(report_data, per_page)
     page_number = request.GET.get('page')
-    report_data = paginator.get_page(page_number)
+    page_obj = paginator.get_page(page_number)
 
+    # 12. Deliver context blocks smoothly into your presentation layer
     context = {
-        'report_data': report_data,
+        'report_data': page_obj,  # Pass the paginated object containing list fragments
         'filter_type': filter_type,
         'year_filter': year_filter,
         'month_filter': month_filter,
         'total_sum': total_amount,
         'years': years,
-        'months': range(1, 13),
+        'months': [(i, calendar.month_name[i]) for i in range(1, 13)],
         'per_page': per_page,
     }
     return render(request, 'myapp/expense_reports.html', context)
@@ -986,8 +1023,18 @@ def report_expenses_csv(request):
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = f'attachment; filename="expenses_{filter_type}_{year_filter or "all"}.csv"'
 
+    period = ""
+    if filter_type == 'daily':
+        period = "Date"
+    if filter_type == 'weekly':
+        period = "Week"
+    if filter_type == 'monthly':
+        period = "Month"
+    if filter_type == 'yearly':
+        period = "Year"
+
     writer = csv.writer(response)
-    writer.writerow(['Period', 'Total Spent (Ksh)'])
+    writer.writerow([period, 'Total Spent (Ksh)'])
 
     for item in report_data:
         amount_ksh = float(item['total_amount'] or 0)
@@ -998,9 +1045,12 @@ def report_expenses_csv(request):
         elif filter_type == 'monthly':
             date_label = item['period'].strftime('%B %Y')
         else:
-            date_label = item['period'].strftime('%Y-%m-%d') # Default fallback
+            # Calculate the explicit +6 days end of the week interval
+            start_date = item['period']
+            end_date = start_date + timedelta(days=6)
+            date_label = f"{start_date.strftime('%d %b')} - {end_date.strftime('%d %b %Y')}"
 
-        writer.writerow([date_label, f"{amount_ksh:.2f}"])
+        writer.writerow([date_label, f"{amount_ksh:,.2f}"])
 
     return response
 
@@ -1011,10 +1061,12 @@ def earning_reports(request):
     year_filter = request.GET.get('year')
     month_filter = request.GET.get('month')
 
-    # NEW: Get items per page
+    # Get items per page from request dropdown params
     per_page = request.GET.get('per_page', '10')
     if not per_page.isdigit():
         per_page = 10
+    else:
+        per_page = int(per_page)
 
     trunc_map = {
         'daily': TruncDay('date'),
@@ -1047,24 +1099,40 @@ def earning_reports(request):
         .order_by('-period')
     )
 
+    # Coerce the database mapping query into an editable Python list of dicts
+    report_data = list(report_data)
 
-    # Calculations
-    total_amount = report_data.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-    total_sum_ksh = total_amount * 125
+    # Calculate Totals dynamically across items in the list array
+    # Base calculation multiplied by your conversion rate exchange factor (125)
+    total_sum_ksh = sum((item['total_amount'] or 0) * 125 for item in report_data)
 
+    # Loop through the list to attach custom properties
     for item in report_data:
+        item['total_amount'] = item['total_amount'] or 0
         item['total_amount_ksh'] = item['total_amount'] * 125
 
-    # Prepare list of years and months for the dropdowns
-    years = Earning.objects.filter(user=request.user).annotate(y=ExtractYear('date')).values_list('y', flat=True).distinct().order_by('-y')
+        # NEW: Calculate the trailing weekend limit (+6 days) for weekly display blocks
+        if filter_type == 'weekly' and item['period']:
+            item['end_period'] = item['period'] + timedelta(days=6)
 
-     # UPDATED: Pagination
+    # Prepare list of distinct historical years for dropdown menus
+    years = (
+        Earning.objects.filter(user=request.user)
+        .annotate(y=ExtractYear('date'))
+        .values_list('y', flat=True)
+        .distinct()
+        .order_by('-y')
+    )
+    # Convert the queryset values to a list of strings so templates never localize them
+    years = [str(y) for y in years]
+
+    # Pagination processing segment
     paginator = Paginator(report_data, per_page)
     page_number = request.GET.get('page')
-    report_data = paginator.get_page(page_number)
+    page_obj = paginator.get_page(page_number)
 
     context = {
-        'report_data': report_data,
+        'report_data': page_obj, # Pass paginated data block slice context
         'filter_type': filter_type,
         'status_filter': status_filter,
         'year_filter': year_filter,
@@ -1072,7 +1140,7 @@ def earning_reports(request):
         'total_sum': total_sum_ksh,
         'status_choices': Earning.STATUS_CHOICES,
         'years': years,
-        'months': range(1, 13), # 1 to 12
+        'months': [(i, calendar.month_name[i]) for i in range(1, 13)],
         'per_page': per_page,
     }
     return render(request, 'myapp/earning_reports.html', context)
@@ -1117,8 +1185,18 @@ def report_earnings_csv(request):
     filename = f"earnings_{filter_type}_{year_filter or 'all'}.csv"
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
+    period = ""
+    if filter_type == 'daily':
+        period = "Date"
+    if filter_type == 'weekly':
+        period = "Week"
+    if filter_type == 'monthly':
+        period = "Month"
+    if filter_type == 'yearly':
+        period = "Year"
+
     writer = csv.writer(response)
-    writer.writerow(['Period', 'Total Earned (Ksh)'])
+    writer.writerow([period, 'Total Earned (Ksh)'])
 
     for item in report_data:
         # Currency conversion with fallback to 0
@@ -1132,21 +1210,270 @@ def report_earnings_csv(request):
         elif filter_type == 'yearly':
             date_label = item['period'].strftime('%Y')
         else: # weekly
-            date_label = f"Week of {item['period'].strftime('%Y-%m-%d')}"
+            # Calculate the explicit +6 days end of the week interval
+            start_date = item['period']
+            end_date = start_date + timedelta(days=6)
+            date_label = f"{start_date.strftime('%d %b')} - {end_date.strftime('%d %b %Y')}"
 
-        writer.writerow([date_label, f"{amount:.2f}"])
+        writer.writerow([date_label, f"{amount:,.2f}"])
 
     return response
 
-# The Settings Hub
 @login_required
-def settings_hub(request):
-    return render(request, 'myapp/settings.html')
+def account_dashboard(request):
+    accounts = AccountBalance.objects.filter(user=request.user)
+    total_balance = accounts.aggregate(Sum('balance'))['balance__sum'] or 0
 
-# The Change Password View
-class MyPasswordChangeView(PasswordChangeView):
-    template_name = 'myapp/change_password.html'
-    success_url = reverse_lazy('expenses:password_change_done')
+    # 1. Grab activity logs
+    activity_log = AccountHistory.objects.filter(
+        account__user=request.user
+    ).select_related('account').order_by('-updated_at')[:15]
+
+    # 2. Dynamically calculate variance differences on the fly
+    for history in activity_log:
+        # Find the snapshot taken immediately BEFORE this current one for this specific account
+        previous_snapshot = AccountHistory.objects.filter(
+            account=history.account,
+            updated_at__lt=history.updated_at
+        ).order_by('-updated_at').first()
+
+        if previous_snapshot:
+            # Shift value = Current snapshot amount minus older baseline snapshot amount
+            history.difference = history.balance_snapshot - previous_snapshot.balance_snapshot
+        else:
+            # If no previous record exists, the entire current balance is the initial addition shift
+            history.difference = history.balance_snapshot
+
+    form = AccountBalanceForm()
+
+    context = {
+        'accounts': accounts,
+        'total_balance': total_balance,
+        'activity_log': activity_log,
+        'form': form,
+    }
+    return render(request, 'myapp/account_dashboard.html', context)
+
+
+@login_required
+def add_account_balance(request):
+    if request.method == 'POST':
+        form = AccountBalanceForm(request.POST)
+        if form.is_valid():
+            account = form.save(commit=False)
+            account.user = request.user
+            account.save()
+
+            account_name = account.account_name
+            messages.success(request, f"'{account_name}' was successfully added.")
+
+            # UPDATED: Redirect smoothly right back to the account dashboard panel layout
+            return redirect('expenses:account_dashboard_main')
+
+    return redirect('expenses:account_dashboard_main')
+
+@login_required
+def edit_account_balance(request, pk):
+    # Lock down the check query rules to matching primary key and authenticated requesting user
+    account = get_object_or_404(AccountBalance, pk=pk, user=request.user)
+
+    if request.method == 'POST':
+        account.account_name = request.POST.get('account_name')
+        account.account_type = request.POST.get('account_type')
+        account.balance = request.POST.get('balance')
+        account.notes = request.POST.get('notes')
+        account.save() # This save command fires off your AccountHistory tracking signal instantly!
+
+        account_name = account.account_name
+        messages.success(request, f"'{account_name}' was successfully updated.")
+
+    return redirect('expenses:account_dashboard_main')
+
+@login_required
+def delete_account_balance(request, pk):
+    account = get_object_or_404(AccountBalance, pk=pk, user=request.user)
+
+    if request.method == 'POST':
+        account_name = account.account_name # Save string reference before removal
+        account.delete()
+
+        # Dispatch alert notification payload to session flash memory
+        messages.success(request, f"'{account_name}' was successfully removed from your portfolio.")
+
+    return redirect('expenses:account_dashboard_main')
+
+@login_required
+def daily_balance_ledger(request):
+    user_accounts = AccountBalance.objects.filter(user=request.user).order_by('account_name')
+
+    history_records = AccountHistory.objects.filter(
+        account__user=request.user
+    ).select_related('account').annotate(
+        date=TruncDate('updated_at')
+    ).order_by('date', 'updated_at')
+
+    daily_matrix = defaultdict(dict)
+    for record in history_records:
+        daily_matrix[record.date][record.account.id] = record.balance_snapshot
+
+    running_balances = {}
+    ledger_data = []
+    sorted_dates = sorted(daily_matrix.keys())
+    previous_day_total = None
+
+    for date in sorted_dates:
+        day_total = 0
+        account_values = {}
+
+        for acc in user_accounts:
+            if acc.id in daily_matrix[date]:
+                running_balances[acc.id] = daily_matrix[date][acc.id]
+
+            current_val = running_balances.get(acc.id, 0)
+            account_values[acc.id] = current_val
+            day_total += current_val
+
+        if previous_day_total is not None:
+            difference = day_total - previous_day_total
+        else:
+            difference = 0
+
+        ledger_data.append({
+            'date': date,
+            'account_values': account_values,
+            'day_total': day_total,
+            'difference': difference,
+        })
+
+        previous_day_total = day_total
+
+    ledger_data.reverse()
+
+    # ==========================================
+    # NEW: PAGINATION LOGIC
+    # ==========================================
+    # Show 10 ledger entries per page
+    paginator = Paginator(ledger_data, 10)
+
+    # Grab the current page number from the URL request parameters (e.g., /ledger/?page=2)
+    page_number = request.GET.get('page')
+
+    try:
+        page_obj = paginator.get_page(page_number)
+    except PageNotAnInteger:
+        # If page parameters are not an integer, default load the first page view
+        page_obj = paginator.page(1)
+    except EmptyPage:
+        # If page parameter is out of range, serve up the final page results
+        page_obj = paginator.page(paginator.num_pages)
+
+    context = {
+        'user_accounts': user_accounts,
+        'ledger_data': page_obj, # Pass the paginated page object instead of the whole raw list
+    }
+    return render(request, 'myapp/daily_ledger.html', context)
+
+@login_required
+def export_ledger_csv(request):
+    # 1. Gather all unique user account records in order
+    user_accounts = AccountBalance.objects.filter(user=request.user).order_by('account_name')
+
+    # 2. Extract historical structural timelines
+    history_records = AccountHistory.objects.filter(
+        account__user=request.user
+    ).select_related('account').annotate(
+        date=TruncDate('updated_at')
+    ).order_by('date', 'updated_at')
+
+    # 3. Process records into a temporary daily matrix dictionary
+    daily_matrix = defaultdict(dict)
+    for record in history_records:
+        daily_matrix[record.date][record.account.id] = record.balance_snapshot
+
+    # 4. Initialize stream data structures
+    running_balances = {}
+    sorted_dates = sorted(daily_matrix.keys())
+    previous_day_total = None
+
+    # Set up HTTP Response header directives to instruct browser to handle as an attachment download
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="daily_ledger_{request.user.username}.csv"'
+
+    writer = csv.writer(response)
+
+    # 5. Write the Header Row
+    headers = ['Date'] + [acc.account_name for acc in user_accounts] + ['Total Balance', 'Daily Shift']
+    writer.writerow(headers)
+
+    # 6. Accumulate daily rows chronological order for calculation accuracy
+    rows_data = []
+    for date in sorted_dates:
+        day_total = 0
+        row = [date.strftime('%Y-%m-%d')]
+
+        for acc in user_accounts:
+            if acc.id in daily_matrix[date]:
+                running_balances[acc.id] = daily_matrix[date][acc.id]
+            current_val = running_balances.get(acc.id, 0.00)
+            row.append(f"{current_val:.2f}")
+            day_total += current_val
+
+        row.append(f"{day_total:.2f}")
+
+        if previous_day_total is not None:
+            shift = day_total - previous_day_total
+            row.append(f"{shift:.2f}")
+        else:
+            row.append("0.00")
+
+        rows_data.append(row)
+        previous_day_total = day_total
+
+    # Reverse data list rows so newest dates are stacked on top before printing to output stream
+    rows_data.reverse()
+    for r in rows_data:
+        writer.writerow(r)
+
+    return response
+
+@login_required
+def user_settings(request):
+    # Initialize both forms for rendering fallback configurations
+    profile_form = UserProfileForm(instance=request.user)
+    password_form = PasswordChangeForm(user=request.user)
+
+    # Track the active display tab using query parameter or tracking flag
+    active_tab = 'profile'
+
+    if request.method == 'POST':
+        # PROCESS PROFILE UPDATE ACTION
+        if 'update_profile' in request.POST:
+            profile_form = UserProfileForm(request.POST, instance=request.user)
+            if profile_form.is_valid():
+                profile_form.save()
+                messages.success(request, 'Your profile details were updated successfully!')
+                return redirect('expenses:settings') # Adjust namespace mapping if needed
+            active_tab = 'profile'
+
+        # PROCESS PASSWORD CHANGE ACTION
+        elif 'change_password' in request.POST:
+            password_form = PasswordChangeForm(user=request.user, data=request.POST)
+            if password_form.is_valid():
+                user = password_form.save()
+                # IMPORTANT: Keeps the user logged in after their password changes
+                update_session_auth_hash(request, user)
+                messages.success(request, 'Your password was successfully updated!')
+                return redirect('expenses:settings')
+            else:
+                messages.error(request, 'Please correct the validation errors below.')
+            active_tab = 'security'
+
+    context = {
+        'profile_form': profile_form,
+        'password_form': password_form,
+        'active_tab': active_tab,
+    }
+    return render(request, 'myapp/settings.html', context)
 
 def password_reset(request):
     return render(request, "myapp/password_reset.html")
