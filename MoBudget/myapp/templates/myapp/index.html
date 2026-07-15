@@ -103,522 +103,585 @@
         background-color: #f8f9fa;
     }
 </style>
-</head>
-<body>
-    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100;">
-        <div id="successToast" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="d-flex">
-                <div class="toast-body">
-                    <span id="toastMessage">Action completed successfully!</span>
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100;">
+    <div id="successToast" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body">
+                <span id="toastMessage">Action completed successfully!</span>
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="modal" data-bs-target="#successToast" aria-label="Close"></button>
+        </div>
+    </div>
+</div>
+<div class="container-fluid py-4">
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <form method="GET" id="filterForm" class="row g-3 align-items-end">
+                <div class="col-lg-3 col-md-4">
+                    <select name="category" class="form-select border-0 bg-light">
+                        <option value="">All Categories</option>
+                        {% for cat in categories %}
+                            <option value="{{ cat.id }}" {% if request.GET.category == cat.id|stringformat:"i" %}selected{% endif %}>{{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="modal" data-bs-target="#successToast" aria-label="Close"></button>
+
+                <div class="col-lg-3 col-md-4">
+                    <select name="timeframe" id="timeframeSelect" class="form-select border-0 bg-light">
+                        <option value="all">All Time</option>
+                        <option value="today" {% if request.GET.timeframe == 'today' %}selected{% endif %}>Today</option>
+                        <option value="this_week" {% if request.GET.timeframe == 'this_week' %}selected{% endif %}>This Week (Mon-Sun)</option>
+                        <option value="month" {% if timeframe == 'month' or not timeframe %}selected{% endif %}>This Month</option>
+                        <option value="year" {% if request.GET.timeframe == 'year' %}selected{% endif %}>This Year</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">Pick Specific Date</label>
+                    <input type="date" name="exact_date" id="exactDateInput" class="form-select" value="{{ request.GET.exact_date }}">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">From</label>
+                    <input type="date" name="start_date" id="startDateInput" class="form-select" value="{{ request.GET.start_date }}">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">To</label>
+                    <input type="date" name="end_date" id="endDateInput" class="form-select" value="{{ request.GET.end_date }}">
+                </div>
+
+                <div class="col-md-4 d-flex gap-2">
+                    <button type="button" onclick="exportCSV()" class="btn btn-outline-success w-100">ExportCSV</button>
+                    <a href="{% url 'expenses:home' %}" class="btn btn-outline-secondary w-100">Reset</a>
+                </div>
+
+            </form>
+        </div>
+    </div>
+    <div class="row mb-4">
+        <div class="col-md-4 mb-3">
+            <div class="card stat-card shadow-sm">
+                <div class="card-body d-flex align-items-center">
+                    <div class="icon-shape me-3">💰</div>
+                    <div>
+                        <p class="text-muted mb-0 small uppercase">Filtered Total</p>
+                        <h3 class="fw-bold mb-0">Ksh <span id="dynamic-total">{{ total|floatformat:2 }} </span></h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card stat-card shadow-sm">
+                <div class="card-body d-flex align-items-center">
+                    <div class="icon-shape me-3">💰</div>
+                    <div>
+                        <p class="text-muted mb-0 small uppercase">This Week Total</p>
+                        <h3 class="fw-bold mb-0">Ksh {{ week_total|floatformat:2 }} </h3>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-    <div class="container-fluid py-4">
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-body">
-                <form method="GET" id="filterForm" class="row g-3 align-items-end">
-                    <div class="col-lg-3 col-md-4">
-                        <select name="category" class="form-select border-0 bg-light">
-                            <option value="">All Categories</option>
-                            {% for cat in categories %}
-                                <option value="{{ cat.id }}" {% if request.GET.category == cat.id|stringformat:"i" %}selected{% endif %}>{{ cat.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
+    <div class="row mb-5">
+        <div class="col-lg-8 mb-4">
+            <div class="table-container shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <div class="row align-items-center">
+                        <div class="col">
+                            <h5 class="mb-0 fw-bold">Recent Transactions</h5>
+                        </div>
+                        <div class="col-md-4">
+                            <form method="GET">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-light border-0"><i class="bi bi-search"></i></span>
+                                    <input type="text" name="q" id="searchInput" class="form-control bg-light border-0" placeholder="Search description..." value="{{ search_query }}">
+                                </div>
+                            </form>
+                        </div>
+                        <div class="col">
+                            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
+                                Add Expense
+                            </button>
+                        </div>
 
-                    <div class="col-lg-3 col-md-4">
-                        <select name="timeframe" id="timeframeSelect" class="form-select border-0 bg-light">
-                            <option value="all">All Time</option>
-                            <option value="today" {% if request.GET.timeframe == 'today' %}selected{% endif %}>Today</option>
-                            <option value="this_week" {% if request.GET.timeframe == 'this_week' %}selected{% endif %}>This Week (Mon-Sun)</option>
-                            <option value="month" {% if timeframe == 'month' or not timeframe %}selected{% endif %}>This Month</option>
-                            <option value="year" {% if request.GET.timeframe == 'year' %}selected{% endif %}>This Year</option>
-                        </select>
                     </div>
-                    <div class="col-md-2">
-                        <label class="form-label small fw-bold">Pick Specific Date</label>
-                        <input type="date" name="exact_date" id="exactDateInput" class="form-select" value="{{ request.GET.exact_date }}">
-                    </div>
+                </div>
+                <div id="transaction-list" data-chart-labels='{{ chart_labels_json|safe }}' data-chart-values='{{ chart_values_json|safe }}'>
 
-                    <div class="col-md-2">
-                        <label class="form-label small fw-bold">From</label>
-                        <input type="date" name="start_date" id="startDateInput" class="form-select" value="{{ request.GET.start_date }}">
-                    </div>
+                    {% if expenses.object_list %}
 
-                    <div class="col-md-2">
-                        <label class="form-label small fw-bold">To</label>
-                        <input type="date" name="end_date" id="endDateInput" class="form-select" value="{{ request.GET.end_date }}">
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="bg-light">
+                                        <tr class="small text-uppercase text-muted">
+                                            <th class="ps-4">Date</th>
+                                            <th>Description</th>
+                                            <th>Category</th>
+                                            <th>Amount</th>
+                                            <th class="text-end pe-4">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for expense in expenses %}
+                                        <tr>
+                                            <td class="ps-4 text-muted small">{{ expense.date|date:"M d, Y" }}</td>
+                                            <td><span class="fw-semibold">{{ expense.description|default:"No Description" }}</span></td>
+                                            <td>
+                                                <span class="badge rounded-pill bg-info-subtle text-info px-3">
+                                                    {{ expense.category.name|default:"Misc" }}
+                                                </span>
+                                            </td>
+                                            <td><span class="text-danger fw-bold">-ksh{{ expense.amount }}</span></td>
+                                            <td class="text-end pe-4">
+                                                <div class="btn-group">
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-secondary"
+                                                            data-bs-toggle="modal"
+                                                            data-bs-target="#editExpenseModal"
+                                                            data-url="{% url 'expenses:edit_expense' expense.pk %}"
+                                                            data-description="{{ expense.description|default:'' }}"
+                                                            data-amount="{{ expense.amount }}"
+                                                            data-category="{{ expense.category.id }}"
+                                                            data-date="{{ expense.date|date:'Y-m-d' }}">
+                                                        <i class="bi bi-pencil"></i>
+                                                    </button>
+                                                    <form method="post" action="{% url 'expenses:delete_expense' expense.pk %}" class="d-inline">
+                                                        {% csrf_token %}
+                                                        <button type="button"
+                                                                class="btn btn-sm btn-outline-danger open-delete-modal"
+                                                                data-bs-toggle="modal"
+                                                                data-bs-target="#deleteModal"
+                                                                data-url="{% url 'expenses:delete_expense' expense.pk %}"
+                                                                data-description="{{ expense.description }}">
+                                                                <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <p class="text-muted">No expenses found for this selection.</p>
+                        </div>
+                    {% endif %}
+                    <div class="card-footer bg-white py-3">
+                        <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+                            {% if expenses.has_other_pages %}
+                                <nav aria-label="Page navigation" class="mt-4">
+                                    <ul class="pagination justify-content-center shadow-sm">
+                                        {% if expenses.has_previous %}
+                                            <li class="page-item">
+                                                <a class="page-link" href="?page={{ expenses.previous_page_number }}&category={{ request.GET.category }}&timeframe={{ request.GET.timeframe }}&per_page={{ per_page }}&exact_date={{ request.GET.exact_date }}&start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}" aria-label="Previous">
+                                                    <span aria-hidden="true">&laquo; Previous</span>
+                                                </a>
+                                            </li>
+                                        {% else %}
+                                            <li class="page-item disabled">
+                                                <span class="page-link">&laquo; Previous</span>
+                                            </li>
+                                        {% endif %}
+                                        <li class="page-item active">
+                                            <span class="page-link">
+                                                Page {{ expenses.number }} of {{ expenses.paginator.num_pages }}
+                                            </span>
+                                        </li>
+                                        {% if expenses.has_next %}
+                                            <li class="page-item">
+                                                <a class="page-link" href="?page={{ expenses.next_page_number }}&category={{ request.GET.category }}&timeframe={{ request.GET.timeframe }}&per_page={{ per_page }}&exact_date={{ request.GET.exact_date }}&start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}" aria-label="Next">
+                                                    <span aria-hidden="true">Next &raquo;</span>
+                                                </a>
+                                            </li>
+                                        {% else %}
+                                            <li class="page-item disabled">
+                                                <span class="page-link">Next &raquo;</span>
+                                            </li>
+                                        {% endif %}
+                                    </ul>
+                                </nav>
+                            {% endif %}
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Items per page</label>
+                                <select name="per_page" class="form-select" form="filterForm" onchange="this.form.submit()">
+                                    <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+                                    <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                                    <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
-
-                    <div class="col-md-4 d-flex gap-2">
-                        <button type="submit" class="btn btn-primary px-4">Filter</button>
-                        <button type="button" onclick="exportCSV()" class="btn btn-outline-success w-100">ExportCSV</button>
-                        <a href="{% url 'expenses:home' %}" class="btn btn-outline-secondary w-100">Reset</a>
-                    </div>
-
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 mb-4">
+            <div class="table-container shadow-sm text-center">
+                <h5 class="fw-bold mb-4">Spending Analysis</h5>
+                {% if chart_values %}
+                <div style="position: relative; height: 350px; width: 100%;">
+                    <canvas id="expenseChart"></canvas>
+                </div>
+                {% else %}
+                <div class="py-5">
+                    <p class="text-muted">No data available for the chart.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-danger text-white border-0">
+                <h5 class="modal-title fw-bold" id="deleteModalLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body py-4 text-center">
+                <p class="mb-1 text-muted">Are you sure you want to delete:</p>
+                <h5 id="modal-expense-description" class="fw-bold text-dark"></h5>
+                <p class="text-danger small mt-3">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer border-0 pb-4 justify-content-center">
+                <button type="button" class="btn btn-light px-4" data-bs-dismiss="modal">Cancel</button>
+                <form id="delete-confirm-form" method="post" action="">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger px-4">Delete Permanently</button>
                 </form>
             </div>
         </div>
-        <div class="row mb-4">
-            <div class="col-md-4 mb-3">
-                <div class="card stat-card shadow-sm">
-                    <div class="card-body d-flex align-items-center">
-                        <div class="icon-shape me-3">💰</div>
-                        <div>
-                            <p class="text-muted mb-0 small uppercase">Filtered Total</p>
-                            <h3 class="fw-bold mb-0">Ksh <span id="dynamic-total">{{ total|floatformat:2 }} </span></h3>
-                        </div>
-                    </div>
-                </div>
+    </div>
+</div>
+<div class="modal fade" id="editExpenseModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 20px;">
+            <div class="modal-header border-0 pt-4 px-4">
+                <h4 class="fw-bold">Edit Expense</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="col-md-4 mb-3">
-                <div class="card stat-card shadow-sm">
-                    <div class="card-body d-flex align-items-center">
-                        <div class="icon-shape me-3">💰</div>
-                        <div>
-                            <p class="text-muted mb-0 small uppercase">This Week Total</p>
-                            <h3 class="fw-bold mb-0">Ksh {{ week_total|floatformat:2 }} </h3>
+            <div class="modal-body p-4">
+                <form method="post" action="" id="editExpenseForm">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Date</label>
+                        <input type="date" name="date" id="editExpDate" class="form-control border-2 shadow-none" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Description</label>
+                        <input type="text" name="description" id="editExpDescription" class="form-control border-2 shadow-none">
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Category</label>
+                            <select name="category" id="editExpCategory" class="form-select border-2 shadow-none">
+                                {% for cat in categories %}
+                                    <option value="{{ cat.id }}">{{ cat.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Amount</label>
+                            <input type="number" step="0.01" name="amount" id="editExpAmount" class="form-control border-2 shadow-none" required>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
-        <div class="row mb-5">
-            <div class="col-lg-8 mb-4">
-                <div class="table-container shadow-sm">
-                    <div class="card-header bg-white py-3">
-                        <div class="row align-items-center">
-                            <div class="col">
-                                <h5 class="mb-0 fw-bold">Recent Transactions</h5>
-                            </div>
-                            <div class="col-md-4">
-                                <form method="GET">
-                                    <div class="input-group input-group-sm">
-                                        <span class="input-group-text bg-light border-0"><i class="bi bi-search"></i></span>
-                                        <input type="text" name="q" id="searchInput" class="form-control bg-light border-0" placeholder="Search description..." value="{{ search_query }}">
-                                    </div>
-                                </form>
-                            </div>
-                            <div class="col">
-                                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
-                                    Add Expense
-                                </button>
-                            </div>
-
-                        </div>
-                    </div>
-                    <div id="transaction-list">
-
-                        {% if expenses.object_list %}
-
-                            <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table table-hover align-middle mb-0">
-                                        <thead class="bg-light">
-                                            <tr class="small text-uppercase text-muted">
-                                                <th class="ps-4">Date</th>
-                                                <th>Description</th>
-                                                <th>Category</th>
-                                                <th>Amount</th>
-                                                <th class="text-end pe-4">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {% for expense in expenses %}
-                                            <tr>
-                                                <td class="ps-4 text-muted small">{{ expense.date|date:"M d, Y" }}</td>
-                                                <td><span class="fw-semibold">{{ expense.description|default:"No Description" }}</span></td>
-                                                <td>
-                                                    <span class="badge rounded-pill bg-info-subtle text-info px-3">
-                                                        {{ expense.category.name|default:"Misc" }}
-                                                    </span>
-                                                </td>
-                                                <td><span class="text-danger fw-bold">-ksh{{ expense.amount }}</span></td>
-                                                <td class="text-end pe-4">
-                                                    <div class="btn-group">
-                                                        <button type="button"
-                                                                class="btn btn-sm btn-outline-secondary"
-                                                                data-bs-toggle="modal"
-                                                                data-bs-target="#editExpenseModal"
-                                                                data-url="{% url 'expenses:edit_expense' expense.pk %}"
-                                                                data-description="{{ expense.description|default:'' }}"
-                                                                data-amount="{{ expense.amount }}"
-                                                                data-category="{{ expense.category.id }}"
-                                                                data-date="{{ expense.date|date:'Y-m-d' }}">
-                                                            <i class="bi bi-pencil"></i>
-                                                        </button>
-                                                        <form method="post" action="{% url 'expenses:delete_expense' expense.pk %}" class="d-inline">
-                                                            {% csrf_token %}
-                                                            <button type="button"
-                                                                    class="btn btn-sm btn-outline-danger open-delete-modal"
-                                                                    data-bs-toggle="modal"
-                                                                    data-bs-target="#deleteModal"
-                                                                    data-url="{% url 'expenses:delete_expense' expense.pk %}"
-                                                                    data-description="{{ expense.description }}">
-                                                                    <i class="bi bi-trash"></i>
-                                                            </button>
-                                                        </form>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        {% else %}
-                            <div class="text-center py-5">
-                                <p class="text-muted">No expenses found for this selection.</p>
-                            </div>
-                        {% endif %}
-                        <div class="card-footer bg-white py-3">
-                            <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
-                                {% if expenses.has_other_pages %}
-                                    <nav aria-label="Page navigation" class="mt-4">
-                                        <ul class="pagination justify-content-center shadow-sm">
-                                            {% if expenses.has_previous %}
-                                                <li class="page-item">
-                                                    <a class="page-link" href="?page={{ expenses.previous_page_number }}&category={{ request.GET.category }}&timeframe={{ request.GET.timeframe }}&per_page={{ per_page }}&exact_date={{ request.GET.exact_date }}&start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}" aria-label="Previous">
-                                                        <span aria-hidden="true">&laquo; Previous</span>
-                                                    </a>
-                                                </li>
-                                            {% else %}
-                                                <li class="page-item disabled">
-                                                    <span class="page-link">&laquo; Previous</span>
-                                                </li>
-                                            {% endif %}
-                                            <li class="page-item active">
-                                                <span class="page-link">
-                                                    Page {{ expenses.number }} of {{ expenses.paginator.num_pages }}
-                                                </span>
-                                            </li>
-                                            {% if expenses.has_next %}
-                                                <li class="page-item">
-                                                    <a class="page-link" href="?page={{ expenses.next_page_number }}&category={{ request.GET.category }}&timeframe={{ request.GET.timeframe }}&per_page={{ per_page }}&exact_date={{ request.GET.exact_date }}&start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}" aria-label="Next">
-                                                        <span aria-hidden="true">Next &raquo;</span>
-                                                    </a>
-                                                </li>
-                                            {% else %}
-                                                <li class="page-item disabled">
-                                                    <span class="page-link">Next &raquo;</span>
-                                                </li>
-                                            {% endif %}
-                                        </ul>
-                                    </nav>
-                                {% endif %}
-                                <div class="col-md-3">
-                                    <label class="form-label small fw-bold">Items per page</label>
-                                    <select name="per_page" class="form-select" form="filterForm" onchange="this.form.submit()">
-                                        <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
-                                        <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
-                                        <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-4 mb-4">
-                <div class="table-container shadow-sm text-center">
-                    <h5 class="fw-bold mb-4">Spending Analysis</h5>
-                    {% if chart_values %}
-                    <div style="position: relative; height: 350px; width: 100%;">
-                        <canvas id="expenseChart"></canvas>
-                    </div>
-                    {% else %}
-                    <div class="py-5">
-                        <p class="text-muted">No data available for the chart.</p>
-                    </div>
-                    {% endif %}
-                </div>
+                    <input type="hidden" name="next" value="{{ request.path }}">
+                    <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold mt-2">Update Expense</button>
+                </form>
             </div>
         </div>
     </div>
-    <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0 shadow">
-                <div class="modal-header bg-danger text-white border-0">
-                    <h5 class="modal-title fw-bold" id="deleteModalLabel">Confirm Deletion</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body py-4 text-center">
-                    <p class="mb-1 text-muted">Are you sure you want to delete:</p>
-                    <h5 id="modal-expense-description" class="fw-bold text-dark"></h5>
-                    <p class="text-danger small mt-3">This action cannot be undone.</p>
-                </div>
-                <div class="modal-footer border-0 pb-4 justify-content-center">
-                    <button type="button" class="btn btn-light px-4" data-bs-dismiss="modal">Cancel</button>
-                    <form id="delete-confirm-form" method="post" action="">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-danger px-4">Delete Permanently</button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="modal fade" id="editExpenseModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0 shadow-lg" style="border-radius: 20px;">
-                <div class="modal-header border-0 pt-4 px-4">
-                    <h4 class="fw-bold">Edit Expense</h4>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <form method="post" action="" id="editExpenseForm">
-                        {% csrf_token %}
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold text-muted text-uppercase">Date</label>
-                            <input type="date" name="date" id="editExpDate" class="form-control border-2 shadow-none" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold text-muted text-uppercase">Description</label>
-                            <input type="text" name="description" id="editExpDescription" class="form-control border-2 shadow-none">
-                        </div>
-                        <div class="row mb-3">
-                            <div class="col">
-                                <label class="form-label small fw-bold text-muted text-uppercase">Category</label>
-                                <select name="category" id="editExpCategory" class="form-select border-2 shadow-none">
-                                    {% for cat in categories %}
-                                        <option value="{{ cat.id }}">{{ cat.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col">
-                                <label class="form-label small fw-bold text-muted text-uppercase">Amount</label>
-                                <input type="number" step="0.01" name="amount" id="editExpAmount" class="form-control border-2 shadow-none" required>
-                            </div>
-                        </div>
-                        <input type="hidden" name="next" value="{{ request.path }}">
-                        <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold mt-2">Update Expense</button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% include 'myapp/add_expense.html' %}
-</body>
-    <script>
-        // Helper function to generate a palette of colors
-        function generatePalette(count) {
-            const colors = [];
-            for (let i = 0; i < count; i++) {
-                // This creates colors distributed evenly around the color wheel (HSL)
-                // Hue is 0-360, Saturation 70%, Lightness 60% for a "Pro" look
-                colors.push(`hsl(${(i * 360) / count}, 70%, 60%)`);
+</div>
+{% include 'myapp/add_expense.html' %}
+
+<script>
+    const timeframeSelect = document.getElementById('timeframeSelect');
+    const exactDateInput = document.getElementById('exactDateInput');
+    const startDateInput = document.getElementById('startDateInput');
+    const endDateInput = document.getElementById('endDateInput');
+
+    function validateDates() {
+        const start = new Date(startDateInput.value);
+        const end = new Date(endDateInput.value);
+
+        // Only validate if both dates are filled in
+        if (startDateInput.value && endDateInput.value) {
+            if (end < start) {
+                alert("The 'To' date cannot be earlier than the 'From' date.");
+                endDateInput.value = ''; // Clear the invalid date
             }
-            return colors;
         }
+    }
 
-        const ctx = document.getElementById('expenseChart').getContext('2d');
-        const labelCount = {{ chart_labels|safe }}.length; // Get the number of categories
+    // If user picks a Preset Timeframe, clear all custom dates
+    timeframeSelect.addEventListener('change', function() {
+        if (this.value !== 'all') {
+            exactDateInput.value = '';
+            startDateInput.value = '';
+            endDateInput.value = '';
+        }
+    });
 
-        new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: {{ chart_labels|safe }},
-                datasets: [{
-                    data: {{ chart_values|safe }},
-                    // Dynamically generate the exact number of colors needed
-                    backgroundColor: generatePalette(labelCount),
-                    borderColor: '',
-                    borderWidth: 2
-                }]
-            },
-            plugins: [ChartDataLabels],
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            usePointStyle: true,
-                            padding: 20
-                        }
-                    },
-                    datalabels: {
-                        color: '#fff',
-                        font: { weight: 'bold' },
-                        formatter: (value, ctx) => {
-                            let sum = 0;
-                            let dataArr = ctx.chart.data.datasets[0].data;
-                            dataArr.map(data => sum += data);
-                            return (value * 100 / sum).toFixed(1) + "%";
-                        }
-                    }
-                }
-            }
-        });
-    </script>
+    // If user picks an Exact Date, clear Timeframe and Ranges
+    exactDateInput.addEventListener('change', function() {
+        if (this.value !== '') {
+            timeframeSelect.value = 'all';
+            startDateInput.value = '';
+            endDateInput.value = '';
+        }
+    });
 
-    <script>
-        const timeframeSelect = document.getElementById('timeframeSelect');
-        const exactDateInput = document.getElementById('exactDateInput');
-        const startDateInput = document.getElementById('startDateInput');
-        const endDateInput = document.getElementById('endDateInput');
-
-        // If user picks a Preset Timeframe, clear all custom dates
-        timeframeSelect.addEventListener('change', function() {
-            if (this.value !== 'all') {
-                exactDateInput.value = '';
-                startDateInput.value = '';
-                endDateInput.value = '';
-            }
-        });
-
-        // If user picks an Exact Date, clear Timeframe and Ranges
-        exactDateInput.addEventListener('change', function() {
-            if (this.value !== '') {
+    // If user picks a Range, clear Timeframe and Exact Date
+    [startDateInput, endDateInput].forEach(input => {
+        input.addEventListener('change', function() {
+            if (startDateInput.value !== '' || endDateInput.value !== '') {
                 timeframeSelect.value = 'all';
-                startDateInput.value = '';
-                endDateInput.value = '';
+                exactDateInput.value = '';
             }
+            validateDates();
         });
+    });
 
-        // If user picks a Range, clear Timeframe and Exact Date
-        [startDateInput, endDateInput].forEach(input => {
-            input.addEventListener('change', function() {
-                if (startDateInput.value !== '' || endDateInput.value !== '') {
-                    timeframeSelect.value = 'all';
-                    exactDateInput.value = '';
-                }
-            });
-        });
-        startDateInput.addEventListener('change', function() {
-            // Prevent the user from picking a 'To' date before the 'From' date
-            endDateInput.min = this.value;
-        });
-        function validateDates() {
-            const start = new Date(startDateInput.value);
-            const end = new Date(endDateInput.value);
+    startDateInput.addEventListener('change', function() {
+        // Prevent the user from picking a 'To' date before the 'From' date in the UI picker
+        endDateInput.min = this.value;
+    });
+</script>
 
-            // Only validate if both dates are filled in
-            if (startDateInput.value && endDateInput.value) {
-                if (end < start) {
-                    alert("The 'To' date cannot be earlier than the 'From' date.");
-                    endDateInput.value = ''; // Clear the invalid date
-                }
-            }
-
+<script>
+    // Palette generator helper
+    function generatePalette(count) {
+        const colors = [];
+        for (let i = 0; i < count; i++) {
+            colors.push(`hsl(${(i * 360) / count}, 70%, 60%)`);
         }
-    </script>
-    <script>
-        document.addEventListener('click', function (e) {
-            // Check if the clicked element is a pagination link
-            if (e.target.closest('.pagination a')) {
-                e.preventDefault(); // Stop the page from reloading
+        return colors;
+    }
 
-                const url = e.target.closest('a').href;
+    // --- CHART INITIALIZATION ---
+    const ctx = document.getElementById('expenseChart').getContext('2d');
+    const initialLabels = {{ chart_labels|safe }};
+    const initialValues = {{ chart_values|safe }};
 
-                // Fetch the new data
-                fetch(url, {
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest' // Tell Django this is an AJAX request
+    // Store the chart globally so we can target and update it later
+    window.myExpenseChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: initialLabels,
+            datasets: [{
+                data: initialValues,
+                backgroundColor: generatePalette(initialLabels.length),
+                borderColor: '#ffffff',
+                borderWidth: 2
+            }]
+        },
+        plugins: [ChartDataLabels],
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { usePointStyle: true, padding: 20 }
+                },
+                datalabels: {
+                    color: '#fff',
+                    font: { weight: 'bold' },
+                    formatter: (value, ctx) => {
+                        let sum = 0;
+                        let dataArr = ctx.chart.data.datasets[0].data;
+                        dataArr.forEach(data => sum += data);
+                        return sum > 0 ? (value * 100 / sum).toFixed(1) + "%" : "0%";
                     }
-                })
-                .then(response => response.text())
-                .then(html => {
-                    // Create a temporary element to parse the HTML string
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(html, 'text/html');
-
-                    // Find the new table content in the response
-                    const newContent = doc.getElementById('transaction-list').innerHTML;
-
-                    // Replace the old table content with the new one
-                    document.getElementById('transaction-list').innerHTML = newContent;
-
-                    // Optional: Smoothly scroll back to the top of the table
-                    document.getElementById('transaction-list').scrollIntoView({ behavior: 'smooth' });
-                })
-                .catch(error => console.warn('Error fetching data:', error));
+                }
             }
-        });
-    </script>
-    <script>
-        const searchInput = document.getElementById('searchInput');
-        let debounceTimer;
+        }
+    });
+</script>
 
+<script>
+    // --- FILTERS & AJAX ENGINE ---
+
+    // 1. REUSABLE HELPER: Gathers active filters
+    function getActiveFilterParams(page = '1') {
+        const params = new URLSearchParams();
+
+        const searchInput = document.getElementById('searchInput');
+        const categoryEl = document.getElementById('filterCategory') || document.querySelector('select[name="category"]');
+        const timeframeEl = document.getElementById('timeframeSelect') || document.querySelector('select[name="timeframe"]');
+        const exactDateEl = document.getElementById('exactDateInput');
+        const startDateEl = document.getElementById('startDateInput');
+        const endDateEl = document.getElementById('endDateInput');
+        const perPageEl = document.getElementById('perPageSelect') || document.querySelector('select[name="per_page"]');
+
+        params.set('page', page);
+
+        if (searchInput && searchInput.value) params.set('q', searchInput.value);
+        if (categoryEl && categoryEl.value) params.set('category', categoryEl.value);
+        if (timeframeEl && timeframeEl.value) params.set('timeframe', timeframeEl.value);
+        if (exactDateEl && exactDateEl.value) params.set('exact_date', exactDateEl.value);
+        if (startDateEl && startDateEl.value) params.set('start_date', startDateEl.value);
+        if (endDateEl && endDateEl.value) params.set('end_date', endDateEl.value);
+        if (perPageEl && perPageEl.value) params.set('per_page', perPageEl.value);
+
+        return params.toString();
+    }
+
+    // 2. REUSABLE AJAX FETCH: Updates table & chart dynamically
+    function updateTransactionList(queryString) {
+        const url = `?${queryString}`;
+
+        fetch(url, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(response => response.text())
+        .then(html => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            const newTransactionList = doc.getElementById('transaction-list');
+            const currentTransactionList = document.getElementById('transaction-list');
+
+            // 1. Update Table HTML content
+            if (newTransactionList && currentTransactionList) {
+                currentTransactionList.innerHTML = newTransactionList.innerHTML;
+            }
+
+            // 2. Update Dynamic Totals Card if it exists
+            const dynamicTotal = doc.getElementById('dynamic-total');
+            if (dynamicTotal) {
+                document.getElementById('dynamic-total').innerHTML = dynamicTotal.innerHTML;
+            }
+
+            // 3. Update Chart.js Data Automatically
+            if (window.myExpenseChart && newTransactionList) {
+                const rawLabels = newTransactionList.getAttribute('data-chart-labels');
+                const rawValues = newTransactionList.getAttribute('data-chart-values');
+
+                if (rawLabels && rawValues) {
+                    const labels = JSON.parse(rawLabels);
+                    const values = JSON.parse(rawValues);
+
+                    // Feed new data to chart
+                    window.myExpenseChart.data.labels = labels;
+                    window.myExpenseChart.data.datasets[0].data = values;
+
+                    // Recalculate color palette dynamically in case categories changed
+                    window.myExpenseChart.data.datasets[0].backgroundColor = generatePalette(labels.length);
+
+                    // Redraw chart smoothly
+                    window.myExpenseChart.update();
+                }
+            }
+        })
+        .catch(error => console.warn('Error fetching filtered data:', error));
+    }
+
+    // 3. AUTO-SUBMIT: Triggers reload on filter change
+    function triggerFilterUpdate() {
+        const queryStr = getActiveFilterParams('1');
+        updateTransactionList(queryStr);
+    }
+
+    // 4. ATTACH LISTENERS
+    document.addEventListener('DOMContentLoaded', function() {
+        const categoryEl = document.getElementById('filterCategory') || document.querySelector('select[name="category"]');
+        const timeframeEl = document.getElementById('timeframeSelect') || document.querySelector('select[name="timeframe"]');
+        const exactDateEl = document.getElementById('exactDateInput');
+        const startDateEl = document.getElementById('startDateInput');
+        const endDateEl = document.getElementById('endDateInput');
+        const perPageEl = document.getElementById('perPageSelect') || document.querySelector('select[name="per_page"]');
+
+        const filterElements = [categoryEl, timeframeEl, exactDateEl, startDateEl, endDateEl, perPageEl];
+        filterElements.forEach(element => {
+            if (element) element.addEventListener('change', triggerFilterUpdate);
+        });
+    });
+
+    // 5. PAGINATION CLICK EVENT
+    document.addEventListener('click', function (e) {
+        if (e.target.closest('.pagination a')) {
+            e.preventDefault();
+            const anchor = e.target.closest('a');
+            const urlObj = new URL(anchor.href);
+            const pageNum = urlObj.searchParams.get('page') || '1';
+
+            const queryStr = getActiveFilterParams(pageNum);
+            updateTransactionList(queryStr);
+
+            document.getElementById('transaction-list').scrollIntoView({ behavior: 'smooth' });
+        }
+    });
+
+    // 6. DEBOUNCED LIVE SEARCH
+    const searchInput = document.getElementById('searchInput');
+    let debounceTimer;
+
+    if (searchInput) {
         searchInput.addEventListener('input', function() {
             clearTimeout(debounceTimer);
-
             debounceTimer = setTimeout(() => {
-                // Collect all current filter data
-                const category = document.querySelector('select[name="category"]').value;
-                const timeframe = document.querySelector('select[name="timeframe"]').value;
-                const q = searchInput.value;
-
-                // Construct the URL with all active filters
-                const url = `?q=${q}&category=${category}&timeframe=${timeframe}`;
-
-                // Reuse your existing AJAX logic to update the table
-                fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-                .then(response => response.text())
-                .then(html => {
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(html, 'text/html');
-                    document.getElementById('transaction-list').innerHTML = doc.getElementById('transaction-list').innerHTML;
-                    document.getElementById('dynamic-total').innerHTML = doc.getElementById('dynamic-total').innerHTML;
-                });
-            }, 300); // Wait 300ms after last keystroke
+                triggerFilterUpdate();
+            }, 300);
         });
-    </script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const deleteModal = document.getElementById('deleteModal');
+    }
+</script>
 
+<script>
+    // Modal Event Listeners & Toast Notifications
+    document.addEventListener('DOMContentLoaded', function() {
+        const deleteModal = document.getElementById('deleteModal');
+        if (deleteModal) {
             deleteModal.addEventListener('show.bs.modal', function(event) {
-                // Button that triggered the modal
                 const button = event.relatedTarget;
-
-                // Extract info from data-* attributes
                 const deleteUrl = button.getAttribute('data-url');
                 const description = button.getAttribute('data-description');
 
-                // Update the modal's content
                 const modalDescription = deleteModal.querySelector('#modal-expense-description');
                 const deleteForm = deleteModal.querySelector('#delete-confirm-form');
 
                 modalDescription.textContent = description || "this expense";
                 deleteForm.setAttribute('action', deleteUrl);
             });
-        });
-        //this is for success message
-        document.addEventListener('DOMContentLoaded', function() {
-            // Check if Django sent a success message
-            {% if messages %}
-                {% for message in messages %}
-                    {% if message.tags == 'success' %}
-                        const toastElement = document.getElementById('successToast');
-                        const toastMessage = document.getElementById('toastMessage');
+        }
 
-                        // Update the text and show the toast
-                        toastMessage.textContent = "{{ message }}";
+        // Django success messages to Bootstrap Toast
+        {% if messages %}
+            {% for message in messages %}
+                {% if message.tags == 'success' %}
+                    const toastElement = document.getElementById('successToast');
+                    const toastMessage = document.getElementById('toastMessage');
+
+                    if (toastElement && toastMessage) {
+                        toastMessage.textContent = "{{ message|escapejs }}";
                         const toast = new bootstrap.Toast(toastElement);
                         toast.show();
-                    {% endif %}
-                {% endfor %}
-            {% endif %}
-        });
-    </script>
-    <script>
-        const editExpenseModal = document.getElementById('editExpenseModal');
-        editExpenseModal.addEventListener('show.bs.modal', function(event) {
-            const btn = event.relatedTarget; // The button you clicked
+                    }
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    });
 
-            // Fill the Form Fields
+    // Edit Expense Modal configuration
+    const editExpenseModal = document.getElementById('editExpenseModal');
+    if (editExpenseModal) {
+        editExpenseModal.addEventListener('show.bs.modal', function(event) {
+            const btn = event.relatedTarget;
+
             editExpenseModal.querySelector('#editExpenseForm').setAttribute('action', btn.getAttribute('data-url'));
             editExpenseModal.querySelector('#editExpDate').value = btn.getAttribute('data-date');
             editExpenseModal.querySelector('#editExpDescription').value = btn.getAttribute('data-description');
             editExpenseModal.querySelector('#editExpAmount').value = btn.getAttribute('data-amount');
 
-            // Set the Category dropdown
             const categoryId = btn.getAttribute('data-category');
             const categorySelect = editExpenseModal.querySelector('#editExpCategory');
-            categorySelect.value = categoryId;
+            if (categorySelect) {
+                categorySelect.value = categoryId;
+            }
         });
-    </script>
+    }
+</script>
 {% endblock %}
