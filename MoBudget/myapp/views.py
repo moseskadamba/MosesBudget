@@ -161,12 +161,23 @@ def home(request):
     category_id = request.GET.get('category')
     timeframe = request.GET.get('timeframe')
 
-    exact_date = request.GET.get('exact_date') # New Parameter
-    start_date = request.GET.get('start_date') # New
-    end_date = request.GET.get('end_date')     # New
+    exact_date = request.GET.get('exact_date')
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
 
-    # If the user just arrived (no query params), default to 'month'
-    if timeframe is None and not any([category_id, request.GET.get('exact_date'), request.GET.get('start_date')]):
+    # Detect if this is a fresh page load with zero filter parameters
+    is_fresh_load = not any([
+        request.GET.get('q'),
+        category_id,
+        timeframe,
+        exact_date,
+        start_date,
+        end_date,
+        request.GET.get('page')
+    ])
+
+    # Default to current month only if it's a completely fresh page access
+    if is_fresh_load:
         timeframe = 'month'
 
     now = timezone.now().date()
@@ -178,9 +189,12 @@ def home(request):
     if exact_date:
         expenses = expenses.filter(date=exact_date)
     elif start_date and end_date:
-        # Filter between two dates inclusive
-        expenses = expenses.filter(date__range=[start_date, end_date])
-    elif timeframe:
+        if start_date <= end_date:
+            expenses = expenses.filter(date__range=[start_date, end_date])
+        else:
+            from django.contrib import messages
+            messages.error(request, "Invalid date range selected.")
+    elif timeframe and timeframe != 'all':
         if timeframe == 'today':
             expenses = expenses.filter(date=now)
         elif timeframe == 'week':
@@ -232,9 +246,16 @@ def home(request):
     # 1. Capture the total count of filtered items BEFORE pagination
     filtered_count = expenses_qs.count()
 
-    # --- 3. PAGINATION LOGIC ---
-    # Get the number of items to display (default to 10)
-    per_page = request.GET.get('per_page', 10)
+    # --- 3. SAFE PAGINATION LOGIC ---
+    # Get per_page, default to 10
+    raw_per_page = request.GET.get('per_page', 10)
+
+    # Safely convert to integer to prevent crashes from bad/missing parameters
+    try:
+        per_page = int(raw_per_page)
+    except (ValueError, TypeError):
+        per_page = 10
+
     # Get current page number
     page_number = request.GET.get('page')
 
@@ -269,7 +290,9 @@ def home(request):
         'week_total':week_total,
         'chart_labels': chart_labels,
         'chart_values': chart_values,
-        'per_page': int(per_page), # Pass back to keep the dropdown selection
+        'chart_labels_json': json.dumps(chart_labels),
+        'chart_values_json': json.dumps(chart_values),
+        'per_page': per_page, # Already an safe integer now!
         'form': form,
     }
     return render(request, 'myapp/index.html', context)
@@ -602,38 +625,60 @@ def add_earning(request):
 
 @login_required
 def earning_list(request):
-    # Base queryset
-    earnings = Earning.objects.filter(user=request.user).select_related('source').order_by('created_at')
+    now = timezone.now()
 
+    # --- 1. HANDLE POST REQUESTS (Add Income Popup) ---
+    if request.method == 'POST':
+        earning_form = EarningForm(request.POST, user=request.user)
+        if earning_form.is_valid():
+            earning = earning_form.save(commit=False)
+            earning.user = request.user
+            earning.save()
+
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'status': 'success',
+                    'message': f"Added {earning.description or 'Earning'}!"
+                })
+
+            messages.success(request, "Earning added successfully!")
+            return redirect('expenses:earning_list')
+        else:
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'status': 'error',
+                    'errors': earning_form.errors
+                }, status=400)
+    else:
+        earning_form = EarningForm(user=request.user)
+
+    # --- 2. BASE QUERYSET ---
+    earnings = Earning.objects.filter(user=request.user).select_related('source')
+
+    # --- 3. FILTER LOGIC ---
     search_query = request.GET.get('q', '')
-
-    # Apply Search Filter
     if search_query:
         earnings = earnings.filter(description__icontains=search_query)
 
-    # --- 1. APPLY FILTERS ---
     source_id = request.GET.get('source')
     timeframe = request.GET.get('timeframe')
+    exact_date = request.GET.get('exact_date')
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
 
-    exact_date = request.GET.get('exact_date') # New Parameter
-    start_date = request.GET.get('start_date') # New
-    end_date = request.GET.get('end_date')     # New
-
-    # If the user just arrived (no query params), default to 'month'
-    if timeframe is None and not any([source_id, request.GET.get('exact_date'), request.GET.get('start_date')]):
+    if timeframe is None and not any([source_id, exact_date, start_date, end_date, search_query]):
         timeframe = 'month'
-
-    now = timezone.now()
 
     if source_id:
         earnings = earnings.filter(source_id=source_id)
 
-    # Filtering Logic Hierarchy
     if exact_date:
         earnings = earnings.filter(date=exact_date)
     elif start_date and end_date:
-        # Filter between two dates inclusive
-        earnings = earnings.filter(date__range=[start_date, end_date])
+        if start_date <= end_date:
+            earnings = earnings.filter(date__range=[start_date, end_date])
+        else:
+            messages.error(request, "The 'To' date cannot be earlier than the 'From' date.")
     elif timeframe:
         if timeframe == 'today':
             earnings = earnings.filter(date=now.date())
@@ -644,94 +689,70 @@ def earning_list(request):
         elif timeframe == 'year':
             earnings = earnings.filter(date__year=now.year)
         elif timeframe == 'this_week':
-            # Calculate Monday of the current week
-            # .weekday() returns: Mon=0, Tue=1 ... Sun=6
             start_of_week = now - timedelta(days=now.weekday())
-            # Sunday is 6 days after Monday
             end_of_week = start_of_week + timedelta(days=6)
+            earnings = earnings.filter(date__range=[start_of_week.date(), end_of_week.date()])
 
-            earnings = earnings.filter(date__range=[start_of_week, end_of_week])
-
-    if start_date and end_date:
-        if start_date <= end_date:
-            earnings = earnings.filter(date__range=[start_date, end_date])
-        else:
-            # If dates are invalid, we can ignore the range or show a message
-            from django.contrib import messages
-            messages.error(request, "Invalid date range selected.")
-
-    # --- 2. DATA FOR PIE CHART ---
-    # Grouping filtered expenses by category name
+    # --- 4. DATA FOR PIE CHART (Now with JSON Serialization!) ---
     chart_data = (
         earnings.values('source__name')
         .annotate(total=Sum('amount'))
         .order_by('source__name')
     )
 
-    # Prepare lists for Chart.js
-    chart_labels = [item['source__name'] or 'Source' for item in chart_data]
-    chart_values = [float(item['total']) for item in chart_data]
+    raw_labels = [item['source__name'] or 'Source' for item in chart_data]
+    raw_values = [float(item['total']) for item in chart_data]
 
+    # Convert the lists directly to standard JSON string objects (using double quotes)
+    chart_labels_json = json.dumps(raw_labels)
+    chart_values_json = json.dumps(raw_values)
+
+    # --- 5. WEEK TOTALS & MAIN TOTALS ---
     start_of_week = now - timedelta(days=now.weekday())
-    # Sunday is 6 days after Monday
     end_of_week = start_of_week + timedelta(days=6)
-    this_week_earnings = earnings.filter(date__range=[start_of_week, end_of_week])
 
     total_earnings = earnings.aggregate(Sum('amount'))['amount__sum'] or 0
-    total = total_earnings*125
-    sources = Source.objects.filter(user=request.user)
+    total = total_earnings * 125
 
-    total_this_week_earnings = this_week_earnings.aggregate(Sum('amount'))['amount__sum'] or 0
-    week_total = total_this_week_earnings*125
+    this_week_earnings_qs = Earning.objects.filter(
+        user=request.user,
+        date__range=[start_of_week.date(), end_of_week.date()]
+    )
+    total_this_week_earnings = this_week_earnings_qs.aggregate(Sum('amount'))['amount__sum'] or 0
+    week_total = total_this_week_earnings * 125
 
+    # --- 6. PAGINATION AND SORTING ---
     earnings_qs = earnings.order_by('-created_at')
-
-    # 1. Capture the total count of filtered items BEFORE pagination
     filtered_count = earnings_qs.count()
 
-    #Add income popup
-    if request.method == 'POST':
-        earning_form = EarningForm(request.POST, user=request.user)
-        if earning_form.is_valid():
-            earning = earning_form.save(commit=False)
-            earning.user = request.user
-            earning.save()
-            # If it's an AJAX request (Add Another), return JSON instead of redirecting
-            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return JsonResponse({'status': 'success', 'message': f"Added {earning.description or 'Earning'}!"})
-
-            django_messages.success(request, "Earning added!")
-            return redirect('expenses:earning_list')
-
-    else:
-        earning_form = EarningForm(user=request.user)
-
-    # --- 3. PAGINATION LOGIC ---
-    # Get the number of items to display (default to 10)
     per_page = request.GET.get('per_page', 10)
-    # Get current page number
     page_number = request.GET.get('page')
 
     paginator = Paginator(earnings_qs, per_page)
     page_obj = paginator.get_page(page_number)
 
-
+    sources = Source.objects.filter(user=request.user)
 
     context = {
-        'earnings': page_obj,  # We pass the page object instead of the queryset
+        'earnings': page_obj,
         'search_query': search_query,
         'timeframe': timeframe,
         'count': filtered_count,
         'sources': sources,
         'total': total,
-        'week_total':week_total,
-        'chart_labels': chart_labels,
-        'chart_values': chart_values,
-        'per_page': int(per_page), # Pass back to keep the dropdown selection
-        'earning_form':earning_form,
+        'week_total': week_total,
+        # 2. Pass the JSON string versions to the context:
+        'chart_labels': chart_labels_json,
+        'chart_values': chart_values_json,
+        'per_page': int(per_page),
+        'earning_form': earning_form,
     }
-    return render(request, 'myapp/earning_list.html', context)
 
+    # --- 7. AJAX FRAGMENT RESPONSE ---
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return render(request, 'myapp/earning_list.html', context)
+
+    return render(request, 'myapp/earning_list.html', context)
 @login_required
 def delete_earning(request, pk):
     earning = get_object_or_404(Earning, pk=pk, user=request.user)
