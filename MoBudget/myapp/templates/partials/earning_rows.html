@@ -1,0 +1,56 @@
+ {% for earning in recent_earnings %}
+    <tr id="earning-row-{{ earning.pk }}">
+        <td class="ps-4 text-nowrap earning-date">{{ earning.date|date:"M d, Y" }}</td>
+        <td>
+            <span class="badge bg-light text-dark border earning-source">{{ earning.source.name|default:"General" }}</span>
+        </td>
+        <td><span class="fw-semibold earning-description">{{ earning.description|truncatechars:30|default:"—" }}</span></td>
+        <td>
+            <select class="form-select form-select-sm status-dropdown border-0 shadow-none rounded-pill earning-status
+                {% if earning.status == 'paid' %}bg-success-subtle text-success
+                {% elif earning.status == 'accepted' %}bg-primary-subtle text-primary
+                {% elif earning.status == 'in_review' %}bg-info-subtle text-info
+                {% else %}bg-warning-subtle text-warning{% endif %}"
+                data-url="{% url 'expenses:update_earning_status' earning.pk %}"
+                style="width: 110px; cursor: pointer; font-size: 0.75rem; font-weight: 600;">
+
+                <option value="in_progress" {% if earning.status == 'in_progress' %}selected{% endif %}>Pending</option>
+                <option value="in_review" {% if earning.status == 'in_review' %}selected{% endif %}>Review</option>
+                <option value="accepted" {% if earning.status == 'accepted' %}selected{% endif %}>Accepted</option>
+                <option value="paid" {% if earning.status == 'paid' %}selected{% endif %}>Paid</option>
+            </select>
+        </td>
+        <td><span class="text-success fw-bold earning-amount">+${{ earning.amount }}</span></td>
+        <td class="text-end pe-4">
+            <button type="button"
+                    class="btn btn-sm btn-outline-success edit-earning-btn"
+                    data-bs-toggle="modal"
+                    data-bs-target="#editEarningModal"
+                    data-url="{% url 'expenses:edit_earning_dashboard' earning.pk %}"
+                    data-description="{{ earning.description|default:'' }}"
+                    data-amount="{{ earning.amount|stringformat:'.2f' }}"
+                    data-source="{{ earning.source.id }}"
+                    data-status="{{ earning.status }}"
+                    data-date="{{ earning.date|date:'Y-m-d' }}">
+                <i class="bi bi-pencil"></i>
+            </button>
+            <form method="post" action="{% url 'expenses:delete_earning_dashboard' earning.pk %}" class="d-inline delete-earning-form">
+                {% csrf_token %}
+                <button type="button"
+                        class="btn btn-sm btn-outline-danger open-delete-modal"
+                        data-bs-toggle="modal"
+                        data-bs-target="#deleteEarningModal"
+                        data-url="{% url 'expenses:delete_earning_dashboard' earning.pk %}"
+                        data-description="{{ earning.description }}">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </form>
+        </td>
+    </tr>
+    {% empty %}
+    <tr id="no-earnings-row">
+        <td colspan="6" class="text-center py-5">
+            <p class="text-muted">No earnings recorded yet.</p>
+        </td>
+    </tr>
+    {% endfor %}

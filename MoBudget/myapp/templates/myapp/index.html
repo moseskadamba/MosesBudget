@@ -239,7 +239,7 @@
                                                             class="btn btn-sm btn-outline-secondary"
                                                             data-bs-toggle="modal"
                                                             data-bs-target="#editExpenseModal"
-                                                            data-url="{% url 'expenses:edit_expense' expense.pk %}"
+                                                            data-url="{% url 'expenses:edit_expense_dashboard' expense.pk %}"
                                                             data-description="{{ expense.description|default:'' }}"
                                                             data-amount="{{ expense.amount }}"
                                                             data-category="{{ expense.category.id }}"
