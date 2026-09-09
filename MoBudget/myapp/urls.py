@@ -12,17 +12,21 @@ urlpatterns = [
     path('signup/', views.signup_view, name='signup'),
     path('logout/', views.logout_view, name='logout'),
     path('test',views.test, name='test'),
+
     path('dashboard',views.dashboard, name='dashboard'),
+    path('dashboard/edit/<int:pk>/', views.edit_expense_dashboard, name='edit_expense_dashboard'),
+    path('dashboard/edit_earning/<int:pk>/', views.edit_earning_dashboard, name='edit_earning_dashboard'),
+    path('delete_dashboard/<int:pk>/', views.delete_expense_dashboard, name='delete_expense_dashboard'),
+
 
     path('export-csv/', views.export_expenses_csv, name='export_csv'),
     path('password-reset/', views.password_reset, name='password-reset'),
     path('contact-admin/', views.contact_admin, name='contact_admin'),
 
     #Expense routes
-    path('add/', views.add_expense, name='add_expense'),
     path('edit/<int:pk>/', views.edit_expense, name='edit_expense'),
     path('delete/<int:pk>/', views.delete_expense, name='delete_expense'),
-    path('delete_dashboard/<int:pk>/', views.delete_expense_dashboard, name='delete_expense_dashboard'),
+
 
     #Earning routes
     path('add_income/', views.add_earning, name='add_income'),
@@ -39,7 +43,6 @@ urlpatterns = [
     path('sources/edit/<int:pk>/', views.edit_source, name='edit_source'),
     path('delete_source/<int:pk>/', views.delete_source, name='delete_source'),
 
-
     # Category routes
     path('categories/', views.category_list, name='category_list'),
     path('add_category/', views.add_category, name='add_category'),
@@ -54,7 +57,9 @@ urlpatterns = [
     path('accounts/ledger/', views.daily_balance_ledger, name='daily_ledger'),
     path('accounts/ledger/export/', views.export_ledger_csv, name='export_ledger_csv'),
 
-    path('settings/', views.user_settings, name='settings'),
+    path('settings/', views.settings_view, name='settings'),
+    path('settings/update-timezone/', views.update_timezone, name='update_timezone'),
+    path('settings/delete-account/', views.delete_account, name='delete_account'),
 
     path('reports/expenses/', views.expense_reports, name='expense_reports'),
     path('reports/earnings/', views.earning_reports, name='earning_reports'),

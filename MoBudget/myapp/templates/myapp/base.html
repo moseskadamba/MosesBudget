@@ -178,9 +178,24 @@
 
     <div id="page-content-wrapper">
         <nav class="navbar navbar-expand-lg navbar-light px-4">
-            <button class="btn btn-outline-dark border-0" id="sidebarToggle">
-                <i class="bi bi-list fs-4"></i>
-            </button>
+            <div class="d-flex align-items-center gap-3">
+                <button class="btn btn-outline-dark border-0 p-1 me-1" id="sidebarToggle">
+                    <i class="bi bi-list fs-4"></i>
+                </button>
+
+                <!-- Dynamic Time Badge -->
+                <div class="clock-badge-container d-none d-sm-flex align-items-center gap-2 small shadow-sm">
+                    <span class="text-secondary d-flex align-items-center gap-1">
+                        <i class="bi bi-calendar-event text-green"></i>
+                        <span class="fw-medium text-dark opacity-75">{{ today|date:"F j, Y" }}</span>
+                    </span>
+                    <span class="text-muted opacity-50">|</span>
+                    <span class="font-monospace fw-bold text-green d-flex align-items-center gap-1">
+                        <i class="bi bi-stopwatch-fill"></i>
+                        <span id="liveClock">--:--:--</span>
+                    </span>
+                </div>
+            </div>
 
             <div class="ms-auto d-flex align-items-center">
                 <a href="#" class="d-flex align-items-center text-decoration-none text-dark">
@@ -220,6 +235,33 @@
             sidebarClose.addEventListener('click', toggleSidebar);
         }
     });
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const clockElement = document.getElementById('liveClock');
+    const serverTimezone = "{{ timezone_name }}";
+
+    function updateClock() {
+        const now = new Date();
+        try {
+            const timeString = now.toLocaleTimeString('en-US', {
+                timeZone: serverTimezone,
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            clockElement.textContent = timeString;
+        } catch (error) {
+            clockElement.textContent = now.toLocaleTimeString('en-US', {
+                hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+        }
+    }
+
+    updateClock();
+    setInterval(updateClock, 1000);
+});
 </script>
 </body>
 </html>

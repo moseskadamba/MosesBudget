@@ -1,0 +1,45 @@
+{% for earning in recent_earnings %}
+<tr id="earning-row-{{ earning.id }}">
+    <td>{{ earning.created_at|date:"Y-m-d" }}</td>
+    <td>{{ earning.source.name }}</td>
+    <td>{{ earning.description }}</td>
+    <td>
+        <select class="form-select form-select-sm earning-status-select" data-earning-id="{{ earning.id }}">
+            <option value="pending" {% if earning.status == 'pending' %}selected{% endif %}>Pending</option>
+            <option value="in_review" {% if earning.status == 'in_review' %}selected{% endif %}>Review</option>
+            <option value="accepted" {% if earning.status == 'accepted' %}selected{% endif %}>Accepted</option>
+            <option value="paid" {% if earning.status == 'paid' %}selected{% endif %}>Paid</option>
+        </select>
+    </td>
+    <td>Ksh {{ earning.amount|floatformat:2 }}</td>
+        <td class="text-end pe-4">
+        <button type="button"
+                class="btn btn-sm btn-outline-success"
+                data-bs-toggle="modal"
+                data-bs-target="#editEarningModal"
+                data-url="{% url 'expenses:edit_earning' earning.pk %}"
+                data-description="{{ earning.description|default:'' }}"
+                data-amount="{{ earning.amount }}"
+                data-source="{{ earning.source.id }}"
+                data-status="{{ earning.status }}"
+                data-date="{{ earning.date|date:'Y-m-d' }}">
+            <i class="bi bi-pencil"></i>
+        </button>
+        <form method="post" action="{% url 'expenses:delete_earning_dashboard' earning.pk %}" class="d-inline">
+            {% csrf_token %}
+            <button type="button"
+                    class="btn btn-sm btn-outline-danger open-delete-modal"
+                    data-bs-toggle="modal"
+                    data-bs-target="#deleteEarningModal"
+                    data-url="{% url 'expenses:delete_earning_dashboard' earning.pk %}"
+                    data-description="{{ earning.description }}">
+                    <i class="bi bi-trash"></i>
+            </button>
+        </form>
+    </td>
+</tr>
+{% empty %}
+<tr>
+    <td colspan="5" class="text-center">No recent earnings found.</td>
+</tr>
+{% endfor %}

@@ -1,0 +1,38 @@
+<div class="row">
+    <!-- Monthly Spent Card -->
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h6>Monthly Spent ({{ current_month_name }})</h6>
+                <h3 id="kpi-monthly-spent">Ksh {{ monthly_spent|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+    <!-- Monthly Earnings Card -->
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h6>Monthly Earnings ({{ current_month_name }})</h6>
+                <h3 id="kpi-monthly-earning">Ksh {{ monthly_earning|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+    <!-- Accepted Jobs Card -->
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h6>Accepted Jobs ({{ accepted_count }})</h6>
+                <h3 id="kpi-accepted-total">Ksh {{ accepted_total|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+    <!-- Pipeline / Pending Card -->
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h6>Pipeline Total</h6>
+                <h3 id="kpi-pipeline-total">Ksh {{ pipeline_total|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+</div>

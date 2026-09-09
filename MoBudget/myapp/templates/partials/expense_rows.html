@@ -1,0 +1,38 @@
+{% for expense in recent_expenses %}
+<tr id="expense-row-{{ expense.id }}">
+    <td class="expense-date">{{ expense.date|date:"M d, Y" }}</td>
+    <td class="expense-description">{{ expense.description }}</td>
+    <td>
+        <span class="badge bg-secondary expense-category">{{ expense.category.name }}</span>
+    </td>
+    <td class="expense-amount">Ksh {{ expense.amount|floatformat:2 }}</td>
+    <td class="text-end pe-4">
+        <button type="button"
+            class="btn btn-sm btn-outline-secondary edit-expense-btn"
+            data-bs-toggle="modal"
+            data-bs-target="#editExpenseModal"
+            data-url="{% url 'expenses:edit_expense_dashboard' expense.pk %}"
+            data-description="{{ expense.description|default:'' }}"
+            data-amount="{{ expense.amount|stringformat:'.2f' }}"
+            data-category="{{ expense.category.id }}"
+            data-date="{{ expense.date|date:'Y-m-d' }}">
+            <i class="bi bi-pencil"></i>
+        </button>
+        <form method="post" action="{% url 'expenses:delete_expense_dashboard' expense.pk %}" class="d-inline">
+            {% csrf_token %}
+            <button type="button"
+                    class="btn btn-sm btn-outline-danger open-delete-modal"
+                    data-bs-toggle="modal"
+                    data-bs-target="#deleteModal"
+                    data-url="{% url 'expenses:delete_expense_dashboard' expense.pk %}"
+                    data-description="{{ expense.description }}">
+                    <i class="bi bi-trash"></i>
+            </button>
+        </form>
+    </td>
+</tr>
+{% empty %}
+<tr>
+    <td colspan="5" class="text-center">No recent expenses found.</td>
+</tr>
+{% endfor %}

@@ -19,7 +19,7 @@
             <div class="card bg-primary text-white shadow-sm border-0">
                 <div class="card-body d-flex justify-content-between align-items-center">
                     <div>
-                        <h3 class="fw-bold mb-0">Ksh {{ monthly_spent|localize }}</h3>
+                        <h3 class="fw-bold mb-0" id="monthly-spent-card">Ksh {{ monthly_spent|localize }}</h3>
                         <small>Spent in {{ current_month_name }}</small>
                     </div>
                     <i class="bi bi-calendar-check fs-1 opacity-50"></i>
@@ -30,7 +30,7 @@
             <div class="card bg-success text-white shadow-sm border-0">
                 <div class="card-body d-flex justify-content-between align-items-center">
                     <div>
-                        <h3 class="fw-bold mb-0">Ksh {{ monthly_earning|floatformat:2|localize }}</h3>
+                        <h3 class="fw-bold mb-0" id="monthly-earning-card">Ksh {{ monthly_earning|floatformat:2|localize }}</h3>
                         <small>Earned in {{ current_month_name }}</small>
                     </div>
                     <i class="bi bi-calendar-check fs-1 opacity-50"></i>
@@ -41,7 +41,7 @@
             <div class="card bg-info text-white shadow-sm border-0">
                 <div class="card-body d-flex justify-content-between align-items-center">
                     <div>
-                        <h3 class="fw-bold mb-0" >Ksh {{ accepted_total|floatformat:2|localize }}</h3>
+                        <h3 class="fw-bold mb-0" id="accepted-total-card" >Ksh {{ accepted_total|floatformat:2|localize }}</h3>
                         <small>Accepted Jobs</small>
                     </div>
                     <i class="bi bi-check2-all fs-3"></i>
@@ -52,7 +52,7 @@
             <div class="card bg-warning text-dark shadow-sm border-0">
                 <div class="card-body d-flex justify-content-between align-items-center">
                     <div>
-                        <h3 class="fw-bold mb-0" >Ksh {{ pipeline_total|floatformat:2|localize }}</h3>
+                        <h3 class="fw-bold mb-0" id="pipeline-total-card" >Ksh {{ pipeline_total|floatformat:2|localize }}</h3>
                         <small class="fw-semibold text-uppercase" style="font-size: 0.7rem;">In Pipeline (Pending)</small>
                     </div>
                     <i class="bi bi-hourglass-split fs-1 opacity-50"></i>
@@ -80,47 +80,8 @@
                             <th class="text-end pe-4">ACTIONS</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {% for expense in recent_expenses %}
-                        <tr>
-                            <td class="ps-4 text-nowrap">{{ expense.date }}</td>
-                            <td>{{ expense.description }}</td>
-                            <td>
-                                <span class="badge bg-info-subtle text-info px-3 py-2 rounded-pill">
-                                    {{ expense.category.name }}
-                                </span>
-                            </td>
-                            <td class="fw-bold">Ksh {{ expense.amount }}</td>
-                            <td class="text-end pe-4">
-                                <button type="button"
-                                    class="btn btn-sm btn-outline-secondary"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#editExpenseModal"
-                                    data-url="{% url 'expenses:edit_expense' expense.pk %}"
-                                    data-description="{{ expense.description|default:'' }}"
-                                    data-amount="{{ expense.amount }}"
-                                    data-category="{{ expense.category.id }}"
-                                    data-date="{{ expense.date|date:'Y-m-d' }}">
-                                <i class="bi bi-pencil"></i>
-                                </button>
-                                <form method="post" action="{% url 'expenses:delete_expense_dashboard' expense.pk %}" class="d-inline">
-                                    {% csrf_token %}
-                                    <button type="button"
-                                            class="btn btn-sm btn-outline-danger open-delete-modal"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#deleteModal"
-                                            data-url="{% url 'expenses:delete_expense_dashboard' expense.pk %}"
-                                            data-description="{{ expense.description }}">
-                                            <i class="bi bi-trash"></i>
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="5" class="text-center py-5 text-muted">No expenses found.</td>
-                        </tr>
-                        {% endfor %}
+                    <tbody id="expenses-table-body">
+                        {% include 'partials/expense_rows.html' %}
                     </tbody>
                 </table>
             </div>
@@ -147,68 +108,75 @@
                             <th class="text-end pe-4">Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {% for earning in recent_earnings %}
-                        <tr>
-                            <td class="ps-4 text-nowrap">{{ earning.date|date:"M d, Y" }}</td>
-                            <td>
-                                <span class="badge bg-light text-dark border">{{ earning.source.name|default:"General" }}</span>
-                            </td>
-                            <td><span class="fw-semibold">{{ earning.description|truncatechars:30|default:"—" }}</span></td>
-                            <td>
-                                <select class="form-select form-select-sm status-dropdown border-0 shadow-none rounded-pill
-                                    {% if earning.status == 'paid' %}bg-success-subtle text-success
-                                    {% elif earning.status == 'accepted' %}bg-primary-subtle text-primary
-                                    {% elif earning.status == 'in_review' %}bg-info-subtle text-info
-                                    {% else %}bg-warning-subtle text-warning{% endif %}"
-                                    data-url="{% url 'expenses:update_earning_status' earning.pk %}"  style="width: 110px; cursor: pointer; font-size: 0.75rem; font-weight: 600;">
-
-                                    <option value="in_progress" {% if earning.status == 'in_progress' %}selected{% endif %}>Pending</option>
-                                    <option value="in_review" {% if earning.status == 'in_review' %}selected{% endif %}>Review</option>
-                                    <option value="accepted" {% if earning.status == 'accepted' %}selected{% endif %}>Accepted</option>
-                                    <option value="paid" {% if earning.status == 'paid' %}selected{% endif %}>Paid</option>
-                                </select>
-                            </td>
-                            <td><span class="text-success fw-bold">+${{ earning.amount }}</span></td>
-                            <td class="text-end pe-4">
-                                <button type="button"
-                                        class="btn btn-sm btn-outline-success"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#editEarningModal"
-                                        data-url="{% url 'expenses:edit_earning' earning.pk %}"
-                                        data-description="{{ earning.description|default:'' }}"
-                                        data-amount="{{ earning.amount }}"
-                                        data-source="{{ earning.source.id }}"
-                                        data-status="{{ earning.status }}"
-                                        data-date="{{ earning.date|date:'Y-m-d' }}">
-                                    <i class="bi bi-pencil"></i>
-                                </button>
-                                <form method="post" action="{% url 'expenses:delete_earning_dashboard' earning.pk %}" class="d-inline">
-                                    {% csrf_token %}
-                                    <button type="button"
-                                            class="btn btn-sm btn-outline-danger open-delete-modal"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#deleteEarningModal"
-                                            data-url="{% url 'expenses:delete_earning_dashboard' earning.pk %}"
-                                            data-description="{{ earning.description }}">
-                                            <i class="bi bi-trash"></i>
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="6" class="text-center py-5">
-                                <p class="text-muted">No earnings recorded yet.</p>
-                            </td>
-                        </tr>
-                        {% endfor %}
+                    <tbody id="earnings-table-body">
+                        {% include 'partials/earning_rows.html' %}
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="addExpenseModal" tabindex="-1" aria-labelledby="addExpenseModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 20px;">
+            <div class="modal-header border-0 pt-4 px-4 pb-0">
+                <h4 class="fw-bold m-0" id="addExpenseModalLabel">Add Expense</h4>
+                <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form method="post" id="expenseForm">
+                    {% csrf_token %}
+                    <input type="hidden" name="submit_expense" value="1">
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger p-2 small mb-3">{{ form.non_field_errors }}</div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Date</label>
+                        {{ form.date }}
+                        {% if form.date.errors %}
+                            <div class="text-danger small mt-1">{{ form.date.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Description</label>
+                        {{ form.description }}
+                        {% if form.description.errors %}
+                            <div class="text-danger small mt-1">{{ form.description.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Category</label>
+                            {{ form.category }}
+                            {% if form.category.errors %}
+                                <div class="text-danger small mt-1">{{ form.category.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Amount (Ksh)</label>
+                            {{ form.amount }}
+                            {% if form.amount.errors %}
+                                <div class="text-danger small mt-1">{{ form.amount.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2 mt-3">
+                        <button type="button" id="addAnotherBtn" class="btn btn-primary btn-lg w-100 fw-bold">
+                            Save & Add Another
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow">
@@ -225,7 +193,7 @@
                 <button type="button" class="btn btn-light px-4" data-bs-dismiss="modal">Cancel</button>
                 <form id="delete-confirm-form" method="post" action="">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-danger px-4">Delete Permanently</button>
+                    <button type="submit" class="btn btn-danger px-4" id="confirm-delete-btn">Delete Permanently</button>
                 </form>
             </div>
         </div>
@@ -292,6 +260,44 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="addIncomeModal" tabindex="-1" aria-labelledby="addIncomeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 20px;">
+            <div class="modal-header border-0 pt-4 px-4 pb-0">
+                <h4 class="fw-bold m-0" id="addIncomeModalLabel">Add Earning</h4>
+                <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form method="POST" id="incomeForm">
+                    {% csrf_token %}
+                    <input type="hidden" name="submit_income" value="1">
+
+                    {% if earning_form.non_field_errors %}
+                        <div class="alert alert-danger p-2 small mb-3">{{ earning_form.non_field_errors }}</div>
+                    {% endif %}
+
+                    {% for field in earning_form %}
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted text-uppercase">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.errors %}
+                                <div class="text-danger small mt-1">{{ field.errors }}</div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="button" id="saveEarningBtn" class="btn btn-success btn-lg w-100 fw-bold">
+                            Save Earning
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="editEarningModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 20px;">
@@ -342,161 +348,651 @@
         </div>
     </div>
 </div>
-{% include 'myapp/add_expense.html' %}
 {% include 'myapp/add_earning.html' %}
 </body>
+<style>
+    .modal-backdrop { z-index: 1050 !important; }
+    #addExpenseModal { z-index: 1060 !important; }
+</style>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const deleteModal = document.getElementById('deleteModal');
+document.addEventListener('DOMContentLoaded', function() {
+    const deleteModalElement = document.getElementById('deleteModal');
+    let targetDeleteUrl = '';
+    let targetExpenseId = null;
 
-        deleteModal.addEventListener('show.bs.modal', function(event) {
-            // Button that triggered the modal
-            const button = event.relatedTarget;
+    deleteModalElement.addEventListener('show.bs.modal', function(event) {
+        const button = event.relatedTarget;
+        targetDeleteUrl = button.getAttribute('data-url');
+        targetExpenseId = button.getAttribute('data-id');
+        const description = button.getAttribute('data-description');
 
-            // Extract info from data-* attributes
-            const deleteUrl = button.getAttribute('data-url');
-            const description = button.getAttribute('data-description');
-
-            // Update the modal's content
-            const modalDescription = deleteModal.querySelector('#modal-expense-description');
-            const deleteForm = deleteModal.querySelector('#delete-confirm-form');
-
+        const modalDescription = deleteModalElement.querySelector('#modal-expense-description');
+        if (modalDescription) {
             modalDescription.textContent = description || "this expense";
-            deleteForm.setAttribute('action', deleteUrl);
-        });
+        }
     });
-    //this is for success message
-    document.addEventListener('DOMContentLoaded', function() {
-        // Check if Django sent a success message
-        {% if messages %}
-            {% for message in messages %}
-                {% if message.tags == 'success' %}
-                    const toastElement = document.getElementById('successToast');
-                    const toastMessage = document.getElementById('toastMessage');
 
-                    // Update the text and show the toast
-                    toastMessage.textContent = "{{ message }}";
-                    const toast = new bootstrap.Toast(toastElement);
-                    toast.show();
-                {% endif %}
-            {% endfor %}
-        {% endif %}
-    });
-</script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const deleteEarningModal = document.getElementById('deleteEarningModal');
+    const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
 
-        deleteEarningModal.addEventListener('show.bs.modal', function(event) {
-            // Button that triggered the modal
-            const button = event.relatedTarget;
+    if (confirmDeleteBtn) {
+        confirmDeleteBtn.addEventListener('click', function(e) {
+            e.preventDefault();
 
-            // Extract info from data-* attributes
-            const deleteUrl = button.getAttribute('data-url');
-            const description = button.getAttribute('data-description');
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
-            // Update the modal's content
-            const modalDescription = deleteEarningModal.querySelector('#modal-earning-description');
-            const deleteForm = deleteEarningModal.querySelector('#delete-confirm-form');
-
-            modalDescription.textContent = description || "this earning";
-            deleteForm.setAttribute('action', deleteUrl);
-        });
-    });
-    //this is for success message
-    document.addEventListener('DOMContentLoaded', function() {
-        // Check if Django sent a success message
-        {% if messages %}
-            {% for message in messages %}
-                {% if message.tags == 'success' %}
-                    const toastElement = document.getElementById('successToast');
-                    const toastMessage = document.getElementById('toastMessage');
-
-                    // Update the text and show the toast
-                    toastMessage.textContent = "{{ message }}";
-                    const toast = new bootstrap.Toast(toastElement);
-                    toast.show();
-                {% endif %}
-            {% endfor %}
-        {% endif %}
-    });
-</script>
-<script>
-    document.querySelectorAll('.status-dropdown').forEach(select => {
-        select.addEventListener('change', function() {
-            const updateUrl = this.getAttribute('data-url'); // Grab the dynamic URL
-            const newStatus = this.value;
-            const self = this;
-
-            fetch(updateUrl, {  // Use the dynamic URL here
+            fetch(targetDeleteUrl, {
                 method: 'POST',
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRFToken': '{{ csrf_token }}',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ 'status': newStatus })
-            })
-            .then(response => {
-                if (!response.ok) {
-                    alert("Server error: " + response.status + ". Path might be wrong.");
-                    location.reload();
-                    return;
+                    'X-CSRFToken': csrfToken,
+                    'Accept': 'application/json'
                 }
-                return response.json();
             })
+            .then(response => response.json())
             .then(data => {
-                if (data && data.status === 'success') {
-                    // Update CSS classes
-                    self.classList.remove('bg-success-subtle', 'text-success', 'bg-primary-subtle', 'text-primary',
-                                        'bg-info-subtle', 'text-info', 'bg-warning-subtle', 'text-warning');
+                if (data.status === 'success') {
+                    // 1. Hide delete modal
+                    const openedModal = bootstrap.Modal.getInstance(deleteModalElement);
+                    openedModal.hide();
 
-                    if (newStatus === 'paid') self.classList.add('bg-success-subtle', 'text-success');
-                    else if (newStatus === 'accepted') self.classList.add('bg-primary-subtle', 'text-primary');
-                    else if (newStatus === 'in_review') self.classList.add('bg-info-subtle', 'text-info');
-                    else self.classList.add('bg-warning-subtle', 'text-warning');
-                    location.reload();
+                    // 2. Remove deleted row
+                    const rowToRemove = document.getElementById(`expense-row-${data.expense_id || targetExpenseId}`);
+                    if (rowToRemove) {
+                        rowToRemove.remove();
+                    }
+
+                    // 3. Append 5th item if available
+                    if (data.replacement_item) {
+                        const item = data.replacement_item;
+                        const tbody = document.getElementById('expenses-table-body');
+
+                        const newRowHTML = `
+                            <tr id="expense-row-${item.id}">
+                                <td>${item.date_formatted}</td>
+                                <td>${item.description}</td>
+                                <td>
+                                    <span class="badge bg-secondary">
+                                        ${item.category_name}
+                                    </span>
+                                </td>
+                                <td>Ksh ${item.amount}</td>
+                                <td class="text-end pe-4">
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-secondary"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#editExpenseModal"
+                                            data-url="${item.edit_url}"
+                                            data-description="${item.description}"
+                                            data-amount="${item.amount}"
+                                            data-category="${item.category_id}"
+                                            data-date="${item.raw_date}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <form method="post" action="${item.delete_url}" class="d-inline">
+                                        <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-danger open-delete-modal"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#deleteModal"
+                                                data-url="${item.delete_url}"
+                                                data-description="${item.description}">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        `;
+                        tbody.insertAdjacentHTML('beforeend', newRowHTML);
+                    }
+
+                    // 4. Update top balance card
+                    const spentCard = document.getElementById('monthly-spent-card');
+                    if (spentCard && data.new_monthly_spent !== undefined) {
+                        spentCard.textContent = `Ksh ${Number(data.new_monthly_spent).toLocaleString()}`;
+                    }
+
+                    // 5. Toast trigger
+                    const toastElement = document.getElementById('successToast');
+                    if (toastElement) {
+                        const toastMessage = document.getElementById('toastMessage');
+                        if (toastMessage) toastMessage.textContent = data.message;
+                        const toast = new bootstrap.Toast(toastElement);
+                        toast.show();
+                    }
                 }
+            })
+            .catch(error => console.error('Delete error:', error));
+        });
+    }
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const deleteEarningModal = document.getElementById('deleteEarningModal');
+    const deleteForm = deleteEarningModal ? deleteEarningModal.querySelector('#delete-confirm-form') : null;
+
+    if (deleteEarningModal) {
+        // Modal Show Listener
+        deleteEarningModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const deleteUrl = button.getAttribute('data-url');
+            const description = button.getAttribute('data-description');
+
+            const modalDescription = deleteEarningModal.querySelector('#modal-earning-description');
+
+            if (modalDescription) {
+                modalDescription.textContent = description || "this earning";
+            }
+            if (deleteForm) {
+                deleteForm.setAttribute('action', deleteUrl);
+            }
+        });
+    }
+
+    // Modal Form AJAX Submit Handler
+    if (deleteForm) {
+        deleteForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const actionUrl = this.getAttribute('action');
+            const formData = new FormData(this);
+
+            fetch(actionUrl, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                },
+                body: formData
+            })
+            .then(response => response.json().then(data => ({ status: response.status, body: data })))
+            .then(res => {
+                if (res.status === 200 && res.body.status === 'success') {
+                    const totals = res.body.totals;
+
+                    // 1. Update the table body with the new top 5 list
+                    const tableBody = document.getElementById('earnings-table-body');
+                    if (tableBody && res.body.rows_html) {
+                        tableBody.innerHTML = res.body.rows_html;
+                    }
+
+                    // 2. Update Dashboard Summary Cards
+                    const monthlyCard = document.getElementById('monthly-earning-card');
+                    const acceptedCard = document.getElementById('accepted-total-card');
+                    const pipelineCard = document.getElementById('pipeline-total-card');
+
+                    if (monthlyCard && totals.monthly_earning) {
+                        monthlyCard.textContent = `Ksh ${totals.monthly_earning}`;
+                    }
+                    if (acceptedCard && totals.accepted_total) {
+                        acceptedCard.textContent = `Ksh ${totals.accepted_total}`;
+                    }
+                    if (pipelineCard && totals.pipeline_total) {
+                        pipelineCard.textContent = `Ksh ${totals.pipeline_total}`;
+                    }
+
+                    // 3. Close the Modal
+                    const modalInstance = bootstrap.Modal.getInstance(deleteEarningModal);
+                    if (modalInstance) {
+                        modalInstance.hide();
+                    }
+
+                    // 4. Optional Toast Notification
+                    const toastElement = document.getElementById('successToast');
+                    if (toastElement) {
+                        const toastMessage = document.getElementById('toastMessage');
+                        if (toastMessage) toastMessage.textContent = res.body.message;
+                        new bootstrap.Toast(toastElement).show();
+                    }
+                } else {
+                    alert("Unable to delete earning. Please try again.");
+                }
+            })
+            .catch(error => {
+                console.error("Delete Error:", error);
+                alert("An error occurred while attempting to delete.");
             });
         });
-    });
+    }
+});
 </script>
- <script>
+<script>
+document.addEventListener('change', function(e) {
+    if (!e.target.classList.contains('status-dropdown')) return;
+
+    const select = e.target;
+    const updateUrl = select.getAttribute('data-url');
+    const newStatus = select.value;
+    const previousStatus = select.getAttribute('data-previous-value') || select.value;
+
+    fetch(updateUrl, {
+        method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 'status': newStatus })
+    })
+    .then(response => {
+        if (!response.ok) throw new Error("Server error: " + response.status);
+        return response.json();
+    })
+    .then(data => {
+        if (data && data.status === 'success') {
+            // Store current status in case of future failed edits
+            select.setAttribute('data-previous-value', newStatus);
+
+            // Update badge colors
+            select.classList.remove(
+                'bg-success-subtle', 'text-success',
+                'bg-primary-subtle', 'text-primary',
+                'bg-info-subtle', 'text-info',
+                'bg-warning-subtle', 'text-warning'
+            );
+
+            const statusClasses = {
+                'paid': ['bg-success-subtle', 'text-success'],
+                'accepted': ['bg-primary-subtle', 'text-primary'],
+                'in_review': ['bg-info-subtle', 'text-info']
+            };
+
+            const classesToAdd = statusClasses[newStatus] || ['bg-warning-subtle', 'text-warning'];
+            select.classList.add(...classesToAdd);
+
+            // Dynamically update dashboard totals
+            const monthlyElem = document.getElementById('monthly-earning-card');
+            const acceptedElem = document.getElementById('accepted-total-card');
+            const pipelineElem = document.getElementById('pipeline-total-card');
+
+            if (monthlyElem && data.monthly_earning !== undefined) monthlyElem.textContent = `Ksh ${data.monthly_earning}`;
+            if (acceptedElem && data.accepted_total !== undefined) acceptedElem.textContent = `Ksh ${data.accepted_total}`;
+            if (pipelineElem && data.pipeline_total !== undefined) pipelineElem.textContent = `Ksh ${data.pipeline_total}`;
+
+            // Trigger Bootstrap Toast
+            const toastElement = document.getElementById('successToast');
+            if (toastElement) {
+                const toastMessage = document.getElementById('toastMessage');
+                if (toastMessage) toastMessage.textContent = data.message || "Status updated!";
+                bootstrap.Toast.getOrCreateInstance(toastElement).show();
+            }
+        } else {
+            throw new Error(data.message || 'Update failed');
+        }
+    })
+    .catch(error => {
+        console.error('Status update failed:', error);
+        alert("Could not update status. Reverting changes.");
+        // Revert select back to original value if request fails
+        select.value = previousStatus;
+    });
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
     const editExpenseModal = document.getElementById('editExpenseModal');
-    editExpenseModal.addEventListener('show.bs.modal', function(event) {
-        const btn = event.relatedTarget; // The button you clicked
+    const editExpenseForm = document.getElementById('editExpenseForm');
 
-        // Fill the Form Fields
-        editExpenseModal.querySelector('#editExpenseForm').setAttribute('action', btn.getAttribute('data-url'));
-        editExpenseModal.querySelector('#editExpDate').value = btn.getAttribute('data-date');
-        editExpenseModal.querySelector('#editExpDescription').value = btn.getAttribute('data-description');
-        editExpenseModal.querySelector('#editExpAmount').value = btn.getAttribute('data-amount');
+    // 1. Populate the form when modal opens
+    if (editExpenseModal) {
+        editExpenseModal.addEventListener('show.bs.modal', function (event) {
+            const btn = event.relatedTarget; // Button that triggered the modal
 
-        // Set the Category dropdown
-        const categoryId = btn.getAttribute('data-category');
-        const categorySelect = editExpenseModal.querySelector('#editExpCategory');
-        categorySelect.value = categoryId;
-    });
+            // Fill Form Fields
+            editExpenseForm.setAttribute('action', btn.getAttribute('data-url'));
+            document.getElementById('editExpDate').value = btn.getAttribute('data-date');
+            document.getElementById('editExpDescription').value = btn.getAttribute('data-description');
+            document.getElementById('editExpAmount').value = btn.getAttribute('data-amount');
+
+            // Set Category dropdown
+            const categoryId = btn.getAttribute('data-category');
+            document.getElementById('editExpCategory').value = categoryId;
+        });
+    }
+
+    // 2. Handle AJAX Form Submission
+    if (editExpenseForm) {
+        editExpenseForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            const actionUrl = this.getAttribute('action');
+
+            fetch(actionUrl, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                },
+                body: formData
+            })
+            .then(response => response.json().then(data => ({ status: response.status, body: data })))
+            .then(res => {
+                if (res.status === 200 && res.body.status === 'success') {
+                    const exp = res.body.expense;
+                    const totals = res.body.totals;
+
+                    // A. Update table row data instantly
+                    const row = document.getElementById(`expense-row-${exp.id}`);
+                    if (row) {
+                        const dateCell = row.querySelector('.expense-date');
+                        const descCell = row.querySelector('.expense-description');
+                        const catCell = row.querySelector('.expense-category');
+                        const amountCell = row.querySelector('.expense-amount');
+
+                        if (dateCell) dateCell.textContent = exp.date_display;
+                        if (descCell) descCell.textContent = exp.description;
+                        if (catCell) catCell.textContent = exp.category_name;
+                        if (amountCell) amountCell.textContent = `Ksh ${exp.amount}`;
+
+                        // B. Update data attributes on the edit button for future edits
+                        const editBtn = row.querySelector('.edit-expense-btn');
+                        if (editBtn) {
+                            editBtn.setAttribute('data-description', exp.description);
+                            editBtn.setAttribute('data-amount', exp.raw_amount);
+                            editBtn.setAttribute('data-category', exp.category_id);
+                            editBtn.setAttribute('data-date', exp.raw_date);
+                        }
+                    }
+
+                    // C. Update Dashboard Cards
+                    const monthlyCard = document.getElementById('monthly-spent-card');
+                    if (monthlyCard && totals.monthly_expenses) {
+                        monthlyCard.textContent = `Ksh ${totals.monthly_expenses}`;
+                    }
+
+                    // D. Dismiss Modal
+                    const modalInstance = bootstrap.Modal.getInstance(editExpenseModal);
+                    if (modalInstance) {
+                        modalInstance.hide();
+                    }
+
+                    // E. Show optional success message (if toast exists)
+                    const toastElement = document.getElementById('successToast');
+                    if (toastElement) {
+                        const toastMessage = document.getElementById('toastMessage');
+                        if (toastMessage) toastMessage.textContent = res.body.message;
+                        new bootstrap.Toast(toastElement).show();
+                    }
+
+                } else {
+                    console.error('Validation errors:', res.body.errors);
+                    alert("Form error: Please verify your inputs.");
+                }
+            })
+            .catch(error => {
+                console.error('Submission error:', error);
+                alert("Something went wrong updating the expense. Please try again.");
+            });
+        });
+    }
+});
 </script>
- <script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
     const editEarningModal = document.getElementById('editEarningModal');
-    editEarningModal.addEventListener('show.bs.modal', function(event) {
-        const btn = event.relatedTarget;
+    const editEarningForm = document.getElementById('editEarningForm');
 
-        // Set Form Action URL
-        editEarningModal.querySelector('#editEarningForm').setAttribute('action', btn.getAttribute('data-url'));
+    // 1. Populate modal fields when opened
+    if (editEarningModal) {
+        editEarningModal.addEventListener('show.bs.modal', function (event) {
+            const btn = event.relatedTarget;
 
-        // Populate Fields
-        editEarningModal.querySelector('#editEarnDate').value = btn.getAttribute('data-date');
-        editEarningModal.querySelector('#editEarnDescription').value = btn.getAttribute('data-description');
-        editEarningModal.querySelector('#editEarnAmount').value = btn.getAttribute('data-amount');
+            editEarningForm.setAttribute('action', btn.getAttribute('data-url'));
+            document.getElementById('editEarnDate').value = btn.getAttribute('data-date');
+            document.getElementById('editEarnDescription').value = btn.getAttribute('data-description');
+            document.getElementById('editEarnAmount').value = btn.getAttribute('data-amount');
 
-        // Set Source Dropdown
-        const sourceId = btn.getAttribute('data-source');
-        editEarningModal.querySelector('#editEarnSource').value = sourceId;
+            const sourceId = btn.getAttribute('data-source');
+            document.getElementById('editEarnSource').value = sourceId;
 
-        const statusValue = btn.getAttribute('data-status');
-        editEarningModal.querySelector('#editEarnStatus').value = statusValue;
-    });
+            const statusValue = btn.getAttribute('data-status');
+            document.getElementById('editEarnStatus').value = statusValue;
+        });
+    }
+
+    // 2. Handle AJAX Submission
+    if (editEarningForm) {
+        editEarningForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            const actionUrl = this.getAttribute('action');
+
+            fetch(actionUrl, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                },
+                body: formData
+            })
+            .then(response => response.json().then(data => ({ status: response.status, body: data })))
+            .then(res => {
+                if (res.status === 200 && res.body.status === 'success') {
+                    const earn = res.body.earning;
+                    const totals = res.body.totals;
+
+                    // A. Update row content
+                    const row = document.getElementById(`earning-row-${earn.id}`);
+                    if (row) {
+                        const dateCell = row.querySelector('.earning-date');
+                        const sourceCell = row.querySelector('.earning-source');
+                        const descCell = row.querySelector('.earning-description');
+                        const statusSelect = row.querySelector('.earning-status');
+                        const amountCell = row.querySelector('.earning-amount');
+
+                        if (dateCell) dateCell.textContent = earn.date_display;
+                        if (sourceCell) sourceCell.textContent = earn.source_name;
+                        if (descCell) descCell.textContent = earn.description;
+                        if (amountCell) amountCell.textContent = `+$${earn.amount}`;
+
+                        // Sync Status Select dropdown inside the row
+                        if (statusSelect) {
+                            statusSelect.value = earn.status;
+
+                            // Update select badge styling classes dynamically
+                            statusSelect.className = 'form-select form-select-sm status-dropdown border-0 shadow-none rounded-pill earning-status ';
+                            if (earn.status === 'paid') {
+                                statusSelect.classList.add('bg-success-subtle', 'text-success');
+                            } else if (earn.status === 'accepted') {
+                                statusSelect.classList.add('bg-primary-subtle', 'text-primary');
+                            } else if (earn.status === 'in_review') {
+                                statusSelect.classList.add('bg-info-subtle', 'text-info');
+                            } else {
+                                statusSelect.classList.add('bg-warning-subtle', 'text-warning');
+                            }
+                        }
+
+                        // B. Update data-* attributes on edit button for future re-edits
+                        const editBtn = row.querySelector('.edit-earning-btn');
+                        if (editBtn) {
+                            editBtn.setAttribute('data-description', earn.raw_description);
+                            editBtn.setAttribute('data-amount', earn.raw_amount);
+                            editBtn.setAttribute('data-source', earn.source_id);
+                            editBtn.setAttribute('data-status', earn.status);
+                            editBtn.setAttribute('data-date', earn.raw_date);
+                        }
+                    }
+
+                    // C. Update Dashboard Metric Cards
+                    const monthlyCard = document.getElementById('monthly-earning-card');
+                    const acceptedCard = document.getElementById('accepted-total-card');
+                    const pipelineCard = document.getElementById('pipeline-total-card');
+
+                    if (monthlyCard && totals.monthly_earning) {
+                        monthlyCard.textContent = `Ksh ${totals.monthly_earning}`;
+                    }
+                    if (acceptedCard && totals.accepted_total) {
+                        acceptedCard.textContent = `Ksh ${totals.accepted_total}`;
+                    }
+                    if (pipelineCard && totals.pipeline_total) {
+                        pipelineCard.textContent = `Ksh ${totals.pipeline_total}`;
+                    }
+
+                    // D. Close Modal
+                    const modalInstance = bootstrap.Modal.getInstance(editEarningModal);
+                    if (modalInstance) {
+                        modalInstance.hide();
+                    }
+
+                    // E. Toast notification (optional)
+                    const toastElement = document.getElementById('successToast');
+                    if (toastElement) {
+                        const toastMessage = document.getElementById('toastMessage');
+                        if (toastMessage) toastMessage.textContent = res.body.message;
+                        new bootstrap.Toast(toastElement).show();
+                    }
+
+                } else {
+                    console.error('Validation errors:', res.body.errors);
+                    alert("Validation error: Please check your inputs.");
+                }
+            })
+            .catch(error => {
+                console.error('Update Error:', error);
+                alert("Something went wrong updating the earning. Please try again.");
+            });
+        });
+    }
+});
+</script>
+
+<script>
+    document.getElementById('addAnotherBtn').addEventListener('click', function() {
+    const form = document.getElementById('expenseForm');
+    const formData = new FormData(form);
+
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+        }
+    })
+    .then(async response => {
+        const text = await response.text();
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            console.error("Non-JSON server response:", text);
+            throw new Error("Server returned invalid response.");
+        }
+        return { status: response.status, body: data };
+    })
+    .then(res => {
+        if (res.status === 200 && res.body.status === 'success') {
+            // 1. Show Success Toast Notification
+            const toastMsg = document.getElementById('toastMessage');
+            if (toastMsg) toastMsg.textContent = res.body.message;
+            const toastElement = document.getElementById('successToast');
+            if (toastElement) new bootstrap.Toast(toastElement).show();
+
+            // 2. Update Expenses Table Body HTML
+            const tableBody = document.getElementById('expenses-table-body');
+            if (tableBody && res.body.rows_html) {
+                tableBody.innerHTML = res.body.rows_html;
+            }
+
+            // 3. Update Monthly Spent Dashboard Card
+            const spentCard = document.getElementById('monthly-spent-card');
+            if (spentCard && res.body.monthly_spent) {
+                spentCard.textContent = `Ksh ${res.body.monthly_spent}`;
+            }
+
+            // 4. Reset Form Fields and Refocus
+            form.reset();
+            const amountInput = form.querySelector('[name="amount"]');
+            if (amountInput) amountInput.focus();
+
+        } else {
+            console.error('Validation Errors:', res.body.errors);
+            alert("Please check your inputs and try again.");
+        }
+    })
+    .catch(error => console.error('Error submitting expense:', error));
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const saveEarningBtn = document.getElementById('saveEarningBtn');
+    const incomeForm = document.getElementById('incomeForm');
+    const addIncomeModal = document.getElementById('addIncomeModal');
+
+    if (saveEarningBtn && incomeForm) {
+        saveEarningBtn.addEventListener('click', function() {
+            const formData = new FormData(incomeForm);
+
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                }
+            })
+            .then(async response => {
+                const text = await response.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    console.error("Non-JSON output returned:", text);
+                    throw new Error("Invalid response from server.");
+                }
+                return { status: response.status, body: data };
+            })
+            .then(res => {
+                if (res.status === 200 && res.body.status === 'success') {
+                    const totals = res.body.totals;
+
+                    // 1. Show Success Toast
+                    const toastMsg = document.getElementById('toastMessage');
+                    if (toastMsg) toastMsg.textContent = res.body.message;
+                    const toastElement = document.getElementById('successToast');
+                    if (toastElement) new bootstrap.Toast(toastElement).show();
+
+                    // 2. Update Table Body HTML
+                    const earningsTableBody = document.getElementById('earnings-table-body');
+                    if (earningsTableBody && res.body.rows_html) {
+                        earningsTableBody.innerHTML = res.body.rows_html;
+                    }
+
+                    // 3. Update Metric Cards
+                    const monthlyCard = document.getElementById('monthly-earning-card');
+                    const acceptedCard = document.getElementById('accepted-total-card');
+                    const pipelineCard = document.getElementById('pipeline-total-card');
+
+                    if (monthlyCard && totals.monthly_earning) {
+                        monthlyCard.textContent = `Ksh ${totals.monthly_earning}`;
+                    }
+                    if (acceptedCard && totals.accepted_total) {
+                        acceptedCard.textContent = `Ksh ${totals.accepted_total}`;
+                    }
+                    if (pipelineCard && totals.pipeline_total) {
+                        pipelineCard.textContent = `Ksh ${totals.pipeline_total}`;
+                    }
+
+                    // 4. Reset form & close modal
+                    incomeForm.reset();
+                    const modalInstance = bootstrap.Modal.getInstance(addIncomeModal);
+                    if (modalInstance) {
+                        modalInstance.hide();
+                    }
+
+                } else {
+                    console.error("Validation Errors:", res.body.errors);
+                    alert("Validation Error: Please check form input values.");
+                }
+            })
+            .catch(error => {
+                console.error("Save Earning Error:", error);
+                alert("Something went wrong saving the earning.");
+            });
+        });
+    }
+});
 </script>
 {% endblock %}

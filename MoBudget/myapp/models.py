@@ -4,6 +4,8 @@ from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
 from decimal import Decimal
 from django.utils import timezone
+from datetime import timedelta
+from django.conf import settings
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
@@ -163,6 +165,35 @@ def create_account_history(sender, instance, created, **kwargs):
         account=instance,
         balance_snapshot=instance.balance
     )
+
+# Create your models here.
+class UserProfile(models.Model):
+    # Links directly to your existing User records.
+    # models.CASCADE ensures if an account is deleted via the danger zone, this record wipes too.
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+
+    # Store the timezone string (e.g., 'Africa/Nairobi')
+    timezone = models.CharField(
+        max_length=100,
+        default=settings.TIME_ZONE,
+        help_text="The user's preferred application anchor timezone"
+    )
+
+    def __str__(self):
+        return f"{self.user.username}'s Profile Workspace"
+
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    if created:
+        UserProfile.objects.create(user=instance)
+
+@receiver(post_save, sender=User)
+def save_user_profile(sender, instance, **kwargs):
+    # Verification check to handle any edge cases where a profile might be missing
+    if hasattr(instance, 'profile'):
+        instance.profile.save()
+    else:
+        UserProfile.objects.create(user=instance)
 
 
 

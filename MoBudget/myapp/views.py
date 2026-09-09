@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.contrib import messages as django_messages
 from django.contrib.auth.decorators import login_required
 from .forms import RegisterForm, ExpenseForm, CategoryForm, EarningForm, SourceForm, AccountBalanceForm, UserProfileForm
-from .models import Expense, Category, Earning, Source, AccountBalance, AccountHistory
+from .models import Expense, Category, Earning, Source, AccountBalance, AccountHistory, UserProfile
 from django.db.models import Sum, Count
 from django.views.generic import TemplateView
 from datetime import timedelta
@@ -17,6 +17,7 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.utils import timezone
 from django.contrib.auth.views import PasswordChangeView
 from django.urls import reverse_lazy
+from django.urls import reverse
 from django.core.mail import send_mail
 from django.conf import settings
 from axes.utils import reset
@@ -29,6 +30,8 @@ from django.db.models.functions import ExtractMonth, ExtractYear
 from collections import defaultdict
 import datetime
 import calendar
+import zoneinfo
+from django.template.loader import render_to_string
 
 class WelcomeView(TemplateView):
     template_name = 'myapp/welcome.html'
@@ -44,75 +47,50 @@ def test(request):
 
 @login_required
 def dashboard(request):
-    # Get current time info
     now = timezone.now()
 
-    # 1. All expenses for the user (to be used for the recent table)
-    all_expenses = Expense.objects.filter(user=request.user).order_by('-date').select_related('category')
-    all_earnings = Earning.objects.filter(user=request.user).order_by('-created_at')
+    all_expenses = Expense.objects.filter(user=request.user).order_by('-date', '-id').select_related('category')
+    all_earnings = Earning.objects.filter(user=request.user).order_by('-date', '-created_at').select_related('source')
     categories = Category.objects.filter(user=request.user)
     sources = Source.objects.filter(user=request.user)
 
-    # 2. Calculate Total Spent for THIS MONTH ONLY
-    # Filters by the current year and the current month
-    monthly_spent = all_expenses.filter(
-        date__year=now.year,
-        date__month=now.month
-    ).aggregate(Sum('amount'))['amount__sum'] or 0
-
-    monthly_earning = all_earnings.filter(
-        date__year=now.year,
-        date__month=now.month
-    ).aggregate(Sum('amount'))['amount__sum'] or 0
-
-    # 3. Count total categories
-    category_count = Category.objects.filter(user=request.user).count()
-    source_count = Source.objects.filter(user=request.user).count()
-
-    # 4. Get recent expenses (first 5 for the table)
-    recent_expenses = all_expenses[:5]
-    recent_earnings = all_earnings[:5]
-
-    total_earnings = monthly_earning*125
-
-    accepted_earnings = Earning.objects.filter(user=request.user, status='accepted')
-
-    # Calculate the sum of these earnings
-    accepted_tot = accepted_earnings.aggregate(Sum('amount'))['amount__sum'] or 0
-    accepted_total = accepted_tot*125
-    # Count how many jobs are accepted
-    accepted_count = accepted_earnings.count()
-
-    # Define the statuses we want to group together
-    pipeline_statuses = ['accepted', 'in_review', 'in_progress']
-
-    # Filter earnings that fall into any of these categories
-    pipeline_earnings = Earning.objects.filter(
-        user=request.user,
-        status__in=pipeline_statuses
-    )
-
-    # Calculate the total sum
-    pipeline_tot = pipeline_earnings.aggregate(Sum('amount'))['amount__sum'] or 0
-    pipeline_total = pipeline_tot*125
-    earning_form = EarningForm(user=request.user)
-    form = ExpenseForm(user=request.user)
     if request.method == 'POST':
         # CHECK FOR EXPENSE SUBMISSION
         if 'submit_expense' in request.POST:
             form = ExpenseForm(request.POST, user=request.user)
-            expense = form.instance
-            expense.user = request.user
-
             if form.is_valid():
+                expense = form.save(commit=False)
+                expense.user = request.user
                 expense.save()
 
-                # If it's an AJAX request (Add Another), return JSON instead of redirecting
                 if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                    return JsonResponse({'status': 'success', 'message': f"Added {expense.description or 'Expense'}!"})
+                    monthly_spent = Expense.objects.filter(
+                        user=request.user,
+                        date__year=now.year,
+                        date__month=now.month
+                    ).aggregate(total=Sum('amount'))['total'] or 0.0
+
+                    recent_expenses = Expense.objects.filter(user=request.user).order_by('-date', '-id').select_related('category')[:5]
+
+                    rows_html = render_to_string(
+                        'partials/expense_rows.html',
+                        {'recent_expenses': recent_expenses, 'request': request},
+                        request=request
+                    )
+
+                    return JsonResponse({
+                        'status': 'success',
+                        'message': f"Added {expense.description or 'Expense'}!",
+                        'rows_html': rows_html,
+                        'monthly_spent': f"{monthly_spent:,.2f}"
+                    })
 
                 messages.success(request, "Expense added!")
                 return redirect('expenses:dashboard')
+            else:
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                    return JsonResponse({'status': 'error', 'errors': form.errors}, status=400)
+
         # CHECK FOR INCOME SUBMISSION
         elif 'submit_income' in request.POST:
             earning_form = EarningForm(request.POST, user=request.user)
@@ -120,31 +98,393 @@ def dashboard(request):
                 earning = earning_form.save(commit=False)
                 earning.user = request.user
                 earning.save()
-                 # If it's an AJAX request (Add Another), return JSON instead of redirecting
+
                 if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                    return JsonResponse({'status': 'success', 'message': f"Added {earning.description or 'Earning'}!"})
+                    # 1. Recalculate Monthly Earnings
+                    monthly_earning_raw = Earning.objects.filter(
+                        user=request.user,
+                        date__year=now.year,
+                        date__month=now.month
+                    ).aggregate(total=Sum('amount'))['total'] or 0.0
+                    total_earnings = monthly_earning_raw * 125
+
+                    # 2. Recalculate Accepted Total
+                    accepted_tot = Earning.objects.filter(
+                        user=request.user,
+                        status='accepted'
+                    ).aggregate(total=Sum('amount'))['total'] or 0.0
+                    accepted_total = accepted_tot * 125
+
+                    # 3. Recalculate Pipeline Total
+                    pipeline_statuses = ['accepted', 'in_review', 'in_progress']
+                    pipeline_tot = Earning.objects.filter(
+                        user=request.user,
+                        status__in=pipeline_statuses
+                    ).aggregate(total=Sum('amount'))['total'] or 0.0
+                    pipeline_total = pipeline_tot * 125
+
+                    # 4. Fetch updated recent 5 earnings
+                    recent_earnings = Earning.objects.filter(
+                        user=request.user
+                    ).order_by('-date', '-created_at').select_related('source')[:5]
+
+                    # 5. Render partial rows
+                    rows_html = render_to_string(
+                        'partials/earning_rows.html',
+                        {'recent_earnings': recent_earnings, 'request': request},
+                        request=request
+                    )
+
+                    return JsonResponse({
+                        'status': 'success',
+                        'message': f"Added {earning.description or 'Earning'}!",
+                        'rows_html': rows_html,
+                        'totals': {
+                            'monthly_earning': f"{total_earnings:,.2f}",
+                            'accepted_total': f"{accepted_total:,.2f}",
+                            'pipeline_total': f"{pipeline_total:,.2f}"
+                        }
+                    })
 
                 messages.success(request, "Earning added!")
                 return redirect('expenses:dashboard')
+            else:
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                    return JsonResponse({'status': 'error', 'errors': earning_form.errors}, status=400)
+
+    # Context setup for normal GET loads
+    monthly_spent = all_expenses.filter(
+        date__year=now.year,
+        date__month=now.month
+    ).aggregate(total=Sum('amount'))['total'] or 0.0
+
+    monthly_earning = all_earnings.filter(
+        date__year=now.year,
+        date__month=now.month
+    ).aggregate(total=Sum('amount'))['total'] or 0.0
+
+    recent_expenses = all_expenses[:5]
+    recent_earnings = all_earnings[:5]
+
+    total_earnings = monthly_earning * 125
+    accepted_tot = Earning.objects.filter(user=request.user, status='accepted').aggregate(total=Sum('amount'))['total'] or 0.0
+    accepted_total = accepted_tot * 125
+
+    pipeline_statuses = ['accepted', 'in_review', 'in_progress']
+    pipeline_tot = Earning.objects.filter(user=request.user, status__in=pipeline_statuses).aggregate(total=Sum('amount'))['total'] or 0.0
+    pipeline_total = pipeline_tot * 125
+
+    earning_form = EarningForm(user=request.user)
+    form = ExpenseForm(user=request.user)
 
     context = {
         'recent_expenses': recent_expenses,
-        'monthly_spent': monthly_spent, # Use this in your HTML
-        'category_count': category_count,
+        'monthly_spent': monthly_spent,
         'categories': categories,
         'recent_earnings': recent_earnings,
         'monthly_earning': total_earnings,
-        'source_count':source_count,
-        'sources':sources,
+        'sources': sources,
         'accepted_total': accepted_total,
-        'accepted_count': accepted_count,
         'pipeline_total': pipeline_total,
-        'current_month_name': now.strftime('%B'), # e.g., "January"
+        'current_month_name': now.strftime('%B'),
         'form': form,
         'earning_form': earning_form,
     }
 
     return render(request, 'myapp/dashboard.html', context)
+
+@login_required
+def edit_expense_dashboard(request, pk):
+    expense = get_object_or_404(Expense, pk=pk, user=request.user)
+
+    if request.method == 'POST':
+        form = ExpenseForm(request.POST, instance=expense, user=request.user)
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+        if form.is_valid():
+            updated_expense = form.save()
+
+            if is_ajax:
+                now = timezone.now()
+
+                total_expenses = Expense.objects.filter(
+                    user=request.user
+                ).aggregate(total=Sum('amount'))['total'] or 0.0
+
+                monthly_expenses = Expense.objects.filter(
+                    user=request.user,
+                    date__year=now.year,
+                    date__month=now.month
+                ).aggregate(total=Sum('amount'))['total'] or 0.0
+
+                return JsonResponse({
+                    'status': 'success',
+                    'message': 'Expense updated successfully!',
+                    'expense': {
+                        'id': updated_expense.pk,
+                        'description': updated_expense.description or '',
+                        'amount': f"{updated_expense.amount:,.2f}",
+                        'raw_amount': str(updated_expense.amount),
+                        'category_id': updated_expense.category.id if updated_expense.category else '',
+                        'category_name': updated_expense.category.name if updated_expense.category else '',
+                        'date_display': updated_expense.date.strftime('%b %d, %Y') if updated_expense.date else '',
+                        'raw_date': updated_expense.date.strftime('%Y-%m-%d') if updated_expense.date else '',
+                    },
+                    'totals': {
+                        'total_expenses': f"{total_expenses:,.2f}",
+                        'monthly_expenses': f"{monthly_expenses:,.2f}",
+                    }
+                })
+
+            messages.success(request, 'Expense updated successfully!')
+            next_url = request.POST.get('next')
+            if next_url:
+                return redirect(next_url)
+            return redirect('expenses:dashboard')
+
+        else:
+            if is_ajax:
+                return JsonResponse({'status': 'error', 'errors': form.errors}, status=400)
+
+    else:
+        form = ExpenseForm(instance=expense, user=request.user)
+
+    return render(request, 'myapp/edit_expense.html', {'form': form, 'expense': expense})
+
+@login_required
+def delete_expense_dashboard(request, pk):
+    expense = get_object_or_404(Expense, pk=pk, user=request.user)
+
+    if request.method == 'POST':
+        description = expense.description or "No description"
+        amount = expense.amount
+        expense.delete()
+
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('accept') == 'application/json':
+            now = timezone.now()
+
+            # Recalculate monthly spent total
+            new_monthly_spent = Expense.objects.filter(
+                user=request.user,
+                date__year=now.year,
+                date__month=now.month
+            ).aggregate(Sum('amount'))['amount__sum'] or 0
+
+            # Get top 5 expenses to pull the 5th item if available
+            top_expenses = Expense.objects.filter(user=request.user).order_by('-date', '-id')[:5]
+
+            replacement_item = None
+            if len(top_expenses) == 5:
+                fifth = top_expenses[4]
+                replacement_item = {
+                    'id': fifth.pk,
+                    'date_formatted': fifth.date.strftime('%b %d, %Y'),  # Formatted for display
+                    'raw_date': fifth.date.strftime('%Y-%m-%d'),          # For edit modal input
+                    'description': fifth.description or '',
+                    'category_name': fifth.category.name if fifth.category else 'Uncategorized',
+                    'category_id': fifth.category.id if fifth.category else '',
+                    'amount': str(fifth.amount),
+                    'edit_url': reverse('expenses:edit_expense', args=[fifth.pk]),
+                    'delete_url': reverse('expenses:delete_expense_dashboard', args=[fifth.pk])
+                }
+
+            return JsonResponse({
+                'status': 'success',
+                'message': f"Expense of Ksh. {amount} ({description}) successfully deleted.",
+                'new_monthly_spent': float(new_monthly_spent),
+                'expense_id': pk,
+                'replacement_item': replacement_item
+            })
+
+        messages.success(request, f"Expense of Ksh. {amount} ({description}) successfully deleted.")
+        return redirect('expenses:dashboard')
+
+    return redirect('expenses:dashboard')
+
+EXCHANGE_RATE = 125 # Or pull dynamically from a setting/helper if needed
+
+@login_required
+@require_POST
+def update_earning_status(request, pk):
+    try:
+        data = json.loads(request.body)
+        new_status = data.get('status')
+
+        # 1. Validate status choice if STATUS_CHOICES exists on Earning model
+        valid_statuses = dict(Earning.STATUS_CHOICES).keys() if hasattr(Earning, 'STATUS_CHOICES') else None
+        if valid_statuses and new_status not in valid_statuses:
+            return JsonResponse({'status': 'error', 'message': 'Invalid status choice.'}, status=400)
+
+        # 2. Fetch object scoped to logged-in user
+        earning = get_object_or_404(Earning, pk=pk, user=request.user)
+        earning.status = new_status
+        earning.save()
+
+        # 3. Recalculate metrics
+        now = timezone.now()
+
+        monthly_earning = Earning.objects.filter(
+            user=request.user,
+            date__year=now.year,
+            date__month=now.month
+        ).aggregate(total=Sum('amount'))['total'] or 0.0
+
+        accepted_total = Earning.objects.filter(
+            user=request.user,
+            status='accepted'
+        ).aggregate(total=Sum('amount'))['total'] or 0.0
+
+        pipeline_total = Earning.objects.filter(
+            user=request.user,
+            status__in=['accepted', 'in_review', 'in_progress']
+        ).aggregate(total=Sum('amount'))['total'] or 0.0
+
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Earning status updated successfully!',
+            'monthly_earning': f"{monthly_earning * EXCHANGE_RATE:,.2f}",
+            'accepted_total': f"{accepted_total * EXCHANGE_RATE:,.2f}",
+            'pipeline_total': f"{pipeline_total * EXCHANGE_RATE:,.2f}"
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON format.'}, status=400)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+@login_required
+def delete_earning_dashboard(request, pk):
+    earning = get_object_or_404(Earning, pk=pk, user=request.user)
+
+    if request.method == 'POST':
+        description = earning.description or "No description"
+        amount = earning.amount
+        earning.delete()
+
+        # Check for AJAX request
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            now = timezone.now()
+
+            # Recalculate Card Totals
+            monthly_earning = Earning.objects.filter(
+                user=request.user,
+                date__year=now.year,
+                date__month=now.month
+            ).aggregate(total=Sum('amount'))['total'] or 0.0
+            mult_earning = monthly_earning*125
+
+            accepted_total = Earning.objects.filter(
+                user=request.user,
+                status='accepted'
+            ).aggregate(total=Sum('amount'))['total'] or 0.0
+            mult_accepted = accepted_total*125
+
+            pipeline_total = Earning.objects.filter(
+                user=request.user,
+                status__in=['accepted','in_progress', 'in_review']
+            ).aggregate(total=Sum('amount'))['total'] or 0.0
+            mult_pipeline = pipeline_total*125
+
+            # Fetch updated top 5 recent earnings
+            recent_earnings = Earning.objects.filter(user=request.user).order_by('-date', '-id')[:5]
+
+            # Render updated table rows HTML
+            rows_html = render_to_string(
+                'partials/earning_rows.html',
+                {'recent_earnings': recent_earnings, 'request': request},
+                request=request
+            )
+
+            return JsonResponse({
+                'status': 'success',
+                'message': f"Earning of ${amount} ({description}) successfully deleted.",
+                'rows_html': rows_html,
+                'has_earnings': recent_earnings.exists(),
+                'totals': {
+                    'monthly_earning': f"{mult_earning:,.2f}",
+                    'accepted_total': f"{mult_accepted:,.2f}",
+                    'pipeline_total': f"{mult_pipeline:,.2f}",
+                }
+            })
+
+        messages.success(request, f"Earning of ${amount} ({description}) successfully deleted.")
+        return redirect('expenses:dashboard')
+
+    return redirect('expenses:dashboard')
+
+@login_required
+def edit_earning_dashboard(request, pk):
+    earning = get_object_or_404(Earning, pk=pk, user=request.user)
+
+    if request.method == 'POST':
+        form = EarningForm(request.POST, instance=earning, user=request.user)
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+        if form.is_valid():
+            updated_earning = form.save()
+
+            if is_ajax:
+                now = timezone.now()
+
+                # Recalculate Dashboard Totals
+                monthly_earning = Earning.objects.filter(
+                    user=request.user,
+                    date__year=now.year,
+                    date__month=now.month
+                ).aggregate(total=Sum('amount'))['total'] or 0.0
+                mult_earning = monthly_earning*125
+
+                accepted_total = Earning.objects.filter(
+                    user=request.user,
+                    status='accepted'
+                ).aggregate(total=Sum('amount'))['total'] or 0.0
+                mult_accepted = accepted_total*125
+
+                pipeline_total = Earning.objects.filter(
+                    user=request.user,
+                    status__in=['in_progress', 'in_review']
+                ).aggregate(total=Sum('amount'))['total'] or 0.0
+                mult_pipeline = pipeline_total*125
+
+                return JsonResponse({
+                    'status': 'success',
+                    'message': 'Earning updated successfully!',
+                    'earning': {
+                        'id': updated_earning.pk,
+                        'description': updated_earning.description or '—',
+                        'raw_description': updated_earning.description or '',
+                        'amount': f"{updated_earning.amount:,.2f}",
+                        'raw_amount': str(updated_earning.amount),
+                        'source_id': updated_earning.source.id if updated_earning.source else '',
+                        'source_name': updated_earning.source.name if updated_earning.source else 'General',
+                        'status': updated_earning.status,
+                        'date_display': updated_earning.date.strftime('%b %d, %Y') if updated_earning.date else '',
+                        'raw_date': updated_earning.date.strftime('%Y-%m-%d') if updated_earning.date else '',
+                    },
+                    'totals': {
+                        'monthly_earning': f"{mult_earning:,.2f}",
+                        'accepted_total': f"{mult_accepted:,.2f}",
+                        'pipeline_total': f"{mult_pipeline:,.2f}",
+                    }
+                })
+
+            messages.success(request, 'Earning updated successfully!')
+            next_url = request.POST.get('next')
+            if next_url:
+                return redirect(next_url)
+            return redirect('expenses:earning_list')
+
+        else:
+            if is_ajax:
+                return JsonResponse({'status': 'error', 'errors': form.errors}, status=400)
+
+    else:
+        form = EarningForm(instance=earning, user=request.user)
+
+    return render(request, 'myapp/edit_earning.html', {
+        'form': form,
+        'earning': earning
+    })
 
 @login_required
 def home(request):
@@ -161,12 +501,23 @@ def home(request):
     category_id = request.GET.get('category')
     timeframe = request.GET.get('timeframe')
 
-    exact_date = request.GET.get('exact_date') # New Parameter
-    start_date = request.GET.get('start_date') # New
-    end_date = request.GET.get('end_date')     # New
+    exact_date = request.GET.get('exact_date')
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
 
-    # If the user just arrived (no query params), default to 'month'
-    if timeframe is None and not any([category_id, request.GET.get('exact_date'), request.GET.get('start_date')]):
+    # Detect if this is a fresh page load with zero filter parameters
+    is_fresh_load = not any([
+        request.GET.get('q'),
+        category_id,
+        timeframe,
+        exact_date,
+        start_date,
+        end_date,
+        request.GET.get('page')
+    ])
+
+    # Default to current month only if it's a completely fresh page access
+    if is_fresh_load:
         timeframe = 'month'
 
     now = timezone.now().date()
@@ -178,9 +529,12 @@ def home(request):
     if exact_date:
         expenses = expenses.filter(date=exact_date)
     elif start_date and end_date:
-        # Filter between two dates inclusive
-        expenses = expenses.filter(date__range=[start_date, end_date])
-    elif timeframe:
+        if start_date <= end_date:
+            expenses = expenses.filter(date__range=[start_date, end_date])
+        else:
+            from django.contrib import messages
+            messages.error(request, "Invalid date range selected.")
+    elif timeframe and timeframe != 'all':
         if timeframe == 'today':
             expenses = expenses.filter(date=now)
         elif timeframe == 'week':
@@ -232,9 +586,16 @@ def home(request):
     # 1. Capture the total count of filtered items BEFORE pagination
     filtered_count = expenses_qs.count()
 
-    # --- 3. PAGINATION LOGIC ---
-    # Get the number of items to display (default to 10)
-    per_page = request.GET.get('per_page', 10)
+    # --- 3. SAFE PAGINATION LOGIC ---
+    # Get per_page, default to 10
+    raw_per_page = request.GET.get('per_page', 10)
+
+    # Safely convert to integer to prevent crashes from bad/missing parameters
+    try:
+        per_page = int(raw_per_page)
+    except (ValueError, TypeError):
+        per_page = 10
+
     # Get current page number
     page_number = request.GET.get('page')
 
@@ -254,7 +615,6 @@ def home(request):
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return JsonResponse({'status': 'success', 'message': f"Added {expense.description or 'Expense'}!"})
 
-            messages.success(request, "Expense added!")
             return redirect('expenses:home')
     else:
         form = ExpenseForm(user=request.user)
@@ -269,10 +629,47 @@ def home(request):
         'week_total':week_total,
         'chart_labels': chart_labels,
         'chart_values': chart_values,
-        'per_page': int(per_page), # Pass back to keep the dropdown selection
+        'chart_labels_json': json.dumps(chart_labels),
+        'chart_values_json': json.dumps(chart_values),
+        'per_page': per_page, # Already an safe integer now!
         'form': form,
     }
     return render(request, 'myapp/index.html', context)
+
+@login_required
+def edit_expense(request, pk):
+    expense = get_object_or_404(Expense, pk=pk, user=request.user)
+
+    if request.method == 'POST':
+        form = ExpenseForm(request.POST, instance=expense, user=request.user)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Expense updated successfully!')
+
+            # NEW: Check if a redirect destination was explicitly sent from the popup form
+            next_url = request.POST.get('next')
+            if next_url:
+                return redirect(next_url)
+
+            return redirect('expenses:dashboard')
+    else:
+        form = ExpenseForm(instance=expense, user=request.user)
+
+    return render(request, 'myapp/edit_expense.html', {'form': form, 'expense': expense})
+
+@login_required
+def delete_expense(request, pk):
+    expense = get_object_or_404(Expense, pk=pk, user=request.user)
+
+    if request.method == 'POST':
+        description = expense.description or "No description"
+        amount = expense.amount
+        expense.delete()
+        messages.success(request, f"Expense of Ksh. {amount} ({description}) successfully deleted.")
+        return redirect('expenses:home')
+
+    # If GET, show confirmation page (optional — we'll use modal instead)
+    return redirect('expenses:home')  # Or render a confirm template if preferred
 
 @login_required
 def export_expenses_csv(request):
@@ -457,76 +854,6 @@ def signup_view(request):
     return render(request, 'myapp/signup.html', {'form': form})
 
 @login_required
-def add_expense(request):
-    if request.method == 'POST':
-        form = ExpenseForm(request.POST, user=request.user)
-        expense = form.instance
-        expense.user = request.user
-
-        if form.is_valid():
-            expense.save()
-
-            # If it's an AJAX request (Add Another), return JSON instead of redirecting
-            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return JsonResponse({'status': 'success', 'message': f"Added {expense.description or 'Expense'}!"})
-
-            messages.success(request, "Expense added!")
-            return redirect('expenses:home')
-    else:
-        form = ExpenseForm(user=request.user)
-
-    return render(request, 'myapp/add_expense.html', {'form': form})
-
-@login_required
-def edit_expense(request, pk):
-    expense = get_object_or_404(Expense, pk=pk, user=request.user)
-
-    if request.method == 'POST':
-        form = ExpenseForm(request.POST, instance=expense, user=request.user)
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Expense updated successfully!')
-
-            # NEW: Check if a redirect destination was explicitly sent from the popup form
-            next_url = request.POST.get('next')
-            if next_url:
-                return redirect(next_url)
-
-            return redirect('expenses:dashboard')
-    else:
-        form = ExpenseForm(instance=expense, user=request.user)
-
-    return render(request, 'myapp/edit_expense.html', {'form': form, 'expense': expense})
-
-@login_required
-def delete_expense(request, pk):
-    expense = get_object_or_404(Expense, pk=pk, user=request.user)
-
-    if request.method == 'POST':
-        description = expense.description or "No description"
-        amount = expense.amount
-        expense.delete()
-        messages.success(request, f"Expense of ${amount} ({description}) successfully deleted.")
-        return redirect('expenses:home')
-
-    # If GET, show confirmation page (optional — we'll use modal instead)
-    return redirect('expenses:home')  # Or render a confirm template if preferred
-
-@login_required
-def delete_expense_dashboard(request, pk):
-    expense = get_object_or_404(Expense, pk=pk, user=request.user)
-
-    if request.method == 'POST':
-        description = expense.description or "No description"
-        amount = expense.amount
-        expense.delete()
-        messages.success(request, f"Expense of ${amount} ({description}) successfully deleted.")
-        return redirect('expenses:dashboard')
-
-    # If GET, show confirmation page (optional — we'll use modal instead)
-    return redirect('expenses:dashboard')  # Or render a confirm template if preferred
-
-@login_required
 def add_category(request):
     if request.method == 'POST':
         # Pass user to the form for the clean_name validation
@@ -602,38 +929,62 @@ def add_earning(request):
 
 @login_required
 def earning_list(request):
-    # Base queryset
-    earnings = Earning.objects.filter(user=request.user).select_related('source').order_by('created_at')
+    now = timezone.now()
 
+    # --- 1. HANDLE POST REQUESTS (Add Income Popup) ---
+    if request.method == 'POST':
+        earning_form = EarningForm(request.POST, user=request.user)
+        if earning_form.is_valid():
+            earning = earning_form.save(commit=False)
+            earning.user = request.user
+            earning.save()
+
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'status': 'success',
+                    'message': f"Added {earning.description or 'Earning'}!"
+                })
+
+            messages.success(request, "Earning added successfully!")
+            return redirect('expenses:earning_list')
+        else:
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'status': 'error',
+                    'errors': earning_form.errors
+                }, status=400)
+    else:
+        earning_form = EarningForm(user=request.user)
+
+    # --- 2. BASE QUERYSET ---
+    earnings = Earning.objects.filter(user=request.user).select_related('source')
+
+    # --- 3. FILTER LOGIC ---
     search_query = request.GET.get('q', '')
-
-    # Apply Search Filter
     if search_query:
         earnings = earnings.filter(description__icontains=search_query)
 
-    # --- 1. APPLY FILTERS ---
     source_id = request.GET.get('source')
     timeframe = request.GET.get('timeframe')
+    exact_date = request.GET.get('exact_date')
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
 
-    exact_date = request.GET.get('exact_date') # New Parameter
-    start_date = request.GET.get('start_date') # New
-    end_date = request.GET.get('end_date')     # New
-
-    # If the user just arrived (no query params), default to 'month'
-    if timeframe is None and not any([source_id, request.GET.get('exact_date'), request.GET.get('start_date')]):
+    # Default to current month only if user just landed with absolutely zero parameters
+    if timeframe is None and not any([source_id, exact_date, start_date, end_date, search_query]):
         timeframe = 'month'
-
-    now = timezone.now()
 
     if source_id:
         earnings = earnings.filter(source_id=source_id)
 
-    # Filtering Logic Hierarchy
+    # Cleaned filter hierarchy
     if exact_date:
         earnings = earnings.filter(date=exact_date)
     elif start_date and end_date:
-        # Filter between two dates inclusive
-        earnings = earnings.filter(date__range=[start_date, end_date])
+        if start_date <= end_date:
+            earnings = earnings.filter(date__range=[start_date, end_date])
+        else:
+            messages.error(request, "The 'To' date cannot be earlier than the 'From' date.")
     elif timeframe:
         if timeframe == 'today':
             earnings = earnings.filter(date=now.date())
@@ -644,92 +995,70 @@ def earning_list(request):
         elif timeframe == 'year':
             earnings = earnings.filter(date__year=now.year)
         elif timeframe == 'this_week':
-            # Calculate Monday of the current week
-            # .weekday() returns: Mon=0, Tue=1 ... Sun=6
+            # Monday to Sunday of the current week
             start_of_week = now - timedelta(days=now.weekday())
-            # Sunday is 6 days after Monday
             end_of_week = start_of_week + timedelta(days=6)
+            earnings = earnings.filter(date__range=[start_of_week.date(), end_of_week.date()])
 
-            earnings = earnings.filter(date__range=[start_of_week, end_of_week])
-
-    if start_date and end_date:
-        if start_date <= end_date:
-            earnings = earnings.filter(date__range=[start_date, end_date])
-        else:
-            # If dates are invalid, we can ignore the range or show a message
-            from django.contrib import messages
-            messages.error(request, "Invalid date range selected.")
-
-    # --- 2. DATA FOR PIE CHART ---
-    # Grouping filtered expenses by category name
+    # --- 4. DATA FOR PIE CHART (Runs on filtered set) ---
     chart_data = (
         earnings.values('source__name')
         .annotate(total=Sum('amount'))
         .order_by('source__name')
     )
-
-    # Prepare lists for Chart.js
     chart_labels = [item['source__name'] or 'Source' for item in chart_data]
     chart_values = [float(item['total']) for item in chart_data]
 
+    # --- 5. WEEK TOTALS & MAIN TOTALS ---
     start_of_week = now - timedelta(days=now.weekday())
-    # Sunday is 6 days after Monday
     end_of_week = start_of_week + timedelta(days=6)
-    this_week_earnings = earnings.filter(date__range=[start_of_week, end_of_week])
 
+    # Calculate filtered total
     total_earnings = earnings.aggregate(Sum('amount'))['amount__sum'] or 0
-    total = total_earnings*125
-    sources = Source.objects.filter(user=request.user)
+    total = total_earnings * 125
 
-    total_this_week_earnings = this_week_earnings.aggregate(Sum('amount'))['amount__sum'] or 0
-    week_total = total_this_week_earnings*125
+    # Calculate this week's total (independent of overall visual filters)
+    this_week_earnings_qs = Earning.objects.filter(
+        user=request.user,
+        date__range=[start_of_week.date(), end_of_week.date()]
+    )
+    total_this_week_earnings = this_week_earnings_qs.aggregate(Sum('amount'))['amount__sum'] or 0
+    week_total = total_this_week_earnings * 125
 
+    # --- 6. PAGINATION AND SORTING ---
     earnings_qs = earnings.order_by('-created_at')
-
-    # 1. Capture the total count of filtered items BEFORE pagination
     filtered_count = earnings_qs.count()
 
-    #Add income popup
-    if request.method == 'POST':
-        earning_form = EarningForm(request.POST, user=request.user)
-        if earning_form.is_valid():
-            earning = earning_form.save(commit=False)
-            earning.user = request.user
-            earning.save()
-            # If it's an AJAX request (Add Another), return JSON instead of redirecting
-            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return JsonResponse({'status': 'success', 'message': f"Added {earning.description or 'Earning'}!"})
-
-            django_messages.success(request, "Earning added!")
-            return redirect('expenses:earning_list')
-
-    else:
-        earning_form = EarningForm(user=request.user)
-
-    # --- 3. PAGINATION LOGIC ---
-    # Get the number of items to display (default to 10)
     per_page = request.GET.get('per_page', 10)
-    # Get current page number
     page_number = request.GET.get('page')
 
     paginator = Paginator(earnings_qs, per_page)
     page_obj = paginator.get_page(page_number)
 
-
+    sources = Source.objects.filter(user=request.user)
 
     context = {
-        'earnings': page_obj,  # We pass the page object instead of the queryset
+        'earnings': page_obj,
         'search_query': search_query,
         'timeframe': timeframe,
         'count': filtered_count,
         'sources': sources,
         'total': total,
-        'week_total':week_total,
+        'week_total': week_total,
         'chart_labels': chart_labels,
         'chart_values': chart_values,
-        'per_page': int(per_page), # Pass back to keep the dropdown selection
-        'earning_form':earning_form,
+        'per_page': int(per_page),
+        'earning_form': earning_form,
     }
+
+    # --- 7. AJAX FRAGMENT RESPONSE (The Key Change) ---
+    # If the request comes via JS fetch (searching, paginating, filtering),
+    # render a specialized context or just the table segment.
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        # You can either render a smaller "partial" template or reuse the same page.
+        # Reusing the same page works because our JS extracts just `#transaction-list`
+        return render(request, 'myapp/earning_list.html', context)
+
     return render(request, 'myapp/earning_list.html', context)
 
 @login_required
@@ -838,19 +1167,6 @@ def edit_earning(request, pk):
     })
 
 @login_required
-def delete_earning_dashboard(request, pk):
-    earning = get_object_or_404(Earning, pk=pk, user=request.user)
-
-    if request.method == 'POST':
-        description = earning.description or "No description"
-        amount = earning.amount
-        earning.delete()
-        messages.success(request, f"Earning of ${amount} ({description}) successfully deleted.")
-        return redirect('expenses:dashboard')
-
-    # If GET, show confirmation page (optional — we'll use modal instead)
-    return redirect('expenses:dashboard')  # Or render a confirm template if preferred
-@login_required
 def add_source(request):
     if request.method == 'POST':
         form = SourceForm(request.POST)
@@ -903,20 +1219,6 @@ def edit_source(request, pk):
         form = SourceForm(instance=source)
 
     return render(request, 'myapp/edit_source.html', {'form': form, 'source': source})
-
-@require_POST
-def update_earning_status(request, pk):
-    print(f"DEBUG: Attempting to update earning {pk}") # Check your console!
-    try:
-        data = json.loads(request.body)
-        earning = Earning.objects.get(pk=pk, user=request.user)
-        earning.status = data.get('status')
-        earning.save()
-        print(f"DEBUG: Saved status as {earning.status}")
-        return JsonResponse({'status': 'success'})
-    except Exception as e:
-        print(f"DEBUG ERROR: {e}")
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
 
 @login_required
 def expense_reports(request):
@@ -1437,43 +1739,111 @@ def export_ledger_csv(request):
     return response
 
 @login_required
-def user_settings(request):
-    # Initialize both forms for rendering fallback configurations
-    profile_form = UserProfileForm(instance=request.user)
-    password_form = PasswordChangeForm(user=request.user)
-
-    # Track the active display tab using query parameter or tracking flag
+def settings_view(request):
+    # Determine which tab should look active on page reload if validation fails
     active_tab = 'profile'
 
     if request.method == 'POST':
-        # PROCESS PROFILE UPDATE ACTION
+        # Branch 1: Handle Profile Information updates
         if 'update_profile' in request.POST:
-            profile_form = UserProfileForm(request.POST, instance=request.user)
-            if profile_form.is_valid():
-                profile_form.save()
-                messages.success(request, 'Your profile details were updated successfully!')
-                return redirect('expenses:settings') # Adjust namespace mapping if needed
             active_tab = 'profile'
+            username = request.POST.get('username', '').strip()
+            email = request.POST.get('email', '').strip()
+            first_name = request.POST.get('first_name', '').strip()  # Added
+            last_name = request.POST.get('last_name', '').strip()    # Added
 
-        # PROCESS PASSWORD CHANGE ACTION
+            # Basic validation check to keep uniqueness constraints safe
+            if User.objects.filter(username=username).exclude(pk=request.user.pk).exists():
+                messages.error(request, "This username is already taken.")
+            elif User.objects.filter(email=email).exclude(pk=request.user.pk).exists():
+                messages.error(request, "This email address is already in use.")
+            else:
+                request.user.username = username
+                request.user.email = email
+                request.user.first_name = first_name  # Save first name
+                request.user.last_name = last_name
+                request.user.save()
+                messages.success(request, "Account information updated successfully!")
+                return redirect('expenses:settings')
+
+        # Branch 2: Handle Password changes safely using built-in forms
         elif 'change_password' in request.POST:
-            password_form = PasswordChangeForm(user=request.user, data=request.POST)
-            if password_form.is_valid():
+            active_tab = 'security'
+            password_form = PasswordChangeForm(request.user, request.POST)
+            if password_form.is_available() and password_form.is_valid():
                 user = password_form.save()
-                # IMPORTANT: Keeps the user logged in after their password changes
+                # Crucial step: keeps the user logged in after their secret changes
                 update_session_auth_hash(request, user)
-                messages.success(request, 'Your password was successfully updated!')
+                messages.success(request, "Your password has been securely updated!")
                 return redirect('expenses:settings')
             else:
-                messages.error(request, 'Please correct the validation errors below.')
-            active_tab = 'security'
+                messages.error(request, "Please correct the security errors highlighted below.")
+    else:
+        password_form = PasswordChangeForm(request.user)
+
+    profile, created = UserProfile.objects.get_or_create(user=request.user)
+    current_timezone = profile.timezone
+
+    # Generate and categorize common standard timezones cleanly
+    all_zones = sorted(list(zoneinfo.available_timezones()))
+    categorized_zones = {}
+
+    for zone in all_zones:
+        if "/" in zone:
+            region, city = zone.split("/", 1)
+            # Filter out minor subregions to keep it scannable
+            if region in ['Africa', 'America', 'Asia', 'Atlantic', 'Australia', 'Europe', 'Indian', 'Pacific']:
+                if region not in categorized_zones:
+                    categorized_zones[region] = []
+                categorized_zones[region].append(zone)
 
     context = {
-        'profile_form': profile_form,
         'password_form': password_form,
         'active_tab': active_tab,
+        'current_timezone': current_timezone,
+        'available_timezones': categorized_zones,
     }
     return render(request, 'myapp/settings.html', context)
+
+@login_required
+def update_timezone(request):
+    """
+    Commits the updated timezone preference directly to the database profile record.
+    """
+    if request.method == 'POST':
+        user_zone = request.POST.get('timezone')
+
+        if user_zone in zoneinfo.available_timezones():
+            # Target the profile directly and save changes securely
+            profile, created = UserProfile.objects.get_or_create(user=request.user)
+            profile.timezone = user_zone
+            profile.save()
+
+            messages.success(request, f"Your workspace timezone is permanently set to {user_zone}!")
+        else:
+            messages.error(request, "Invalid timezone selected.")
+
+    return redirect('expenses:settings')
+
+@login_required
+def delete_account(request):
+    """
+    Handles secure, irreversible profile closure and session termination.
+    """
+    if request.method == 'POST':
+        user = request.user
+        # Terminate account execution block
+        user.delete()
+
+        # Log the user out safely to drop active cookies/sessions
+        logout(request)
+
+        # Send a feedback notification to the next request context
+        messages.success(request, "Your account has been completely and successfully removed from Chronos.")
+        return redirect('expenses:welcome')
+
+    # Block accidental GET requests or direct navigation pointing to this endpoint
+    return redirect('expenses:settings')
 
 def password_reset(request):
     return render(request, "myapp/password_reset.html")
