@@ -117,6 +117,8 @@
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-body">
             <form method="GET" id="filterForm" class="row g-3 align-items-end">
+                <input type="hidden" name="sort" value="{{ sort_by }}">
+                <input type="hidden" name="direction" value="{{ sort_direction }}">
                 <div class="col-lg-3 col-md-4">
                     <select name="category" class="form-select border-0 bg-light">
                         <option value="">All Categories</option>
@@ -193,6 +195,8 @@
                         </div>
                         <div class="col-md-4">
                             <form method="GET">
+                                <input type="hidden" name="sort" value="{{ sort_by }}">
+                                <input type="hidden" name="direction" value="{{ sort_direction }}">
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text bg-light border-0"><i class="bi bi-search"></i></span>
                                     <input type="text" name="q" id="searchInput" class="form-control bg-light border-0" placeholder="Search description..." value="{{ search_query }}">
@@ -219,7 +223,27 @@
                                             <th class="ps-4">Date</th>
                                             <th>Description</th>
                                             <th>Category</th>
-                                            <th>Amount</th>
+                                            <th>
+                                                <form method="get" class="d-inline js-amount-sort-form">
+                                                    <input type="hidden" name="q" value="{{ search_query }}">
+                                                    <input type="hidden" name="category" value="{{ request.GET.category }}">
+                                                    <input type="hidden" name="timeframe" value="{{ timeframe }}">
+                                                    <input type="hidden" name="exact_date" value="{{ request.GET.exact_date }}">
+                                                    <input type="hidden" name="start_date" value="{{ request.GET.start_date }}">
+                                                    <input type="hidden" name="end_date" value="{{ request.GET.end_date }}">
+                                                    <input type="hidden" name="per_page" value="{{ per_page }}">
+                                                    <input type="hidden" name="sort" value="amount">
+                                                    <input type="hidden" name="direction" value="{{ next_amount_direction }}">
+                                                    <button type="submit" class="btn btn-link text-muted p-0 text-decoration-none">
+                                                        Amount
+                                                        {% if sort_by == 'amount' %}
+                                                            {% if sort_direction == 'asc' %}<i class="bi bi-sort-up" aria-hidden="true"></i>{% else %}<i class="bi bi-sort-down" aria-hidden="true"></i>{% endif %}
+                                                        {% else %}
+                                                            <i class="bi bi-arrow-down-up" aria-hidden="true"></i>
+                                                        {% endif %}
+                                                    </button>
+                                                </form>
+                                            </th>
                                             <th class="text-end pe-4">Actions</th>
                                         </tr>
                                     </thead>
@@ -278,7 +302,7 @@
                                     <ul class="pagination justify-content-center shadow-sm">
                                         {% if expenses.has_previous %}
                                             <li class="page-item">
-                                                <a class="page-link" href="?page={{ expenses.previous_page_number }}&category={{ request.GET.category }}&timeframe={{ request.GET.timeframe }}&per_page={{ per_page }}&exact_date={{ request.GET.exact_date }}&start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}" aria-label="Previous">
+                                                <a class="page-link" href="?page={{ expenses.previous_page_number }}&q={{ search_query|urlencode }}&category={{ request.GET.category }}&timeframe={{ timeframe }}&per_page={{ per_page }}&exact_date={{ request.GET.exact_date }}&start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}&sort={{ sort_by }}&direction={{ sort_direction }}" aria-label="Previous">
                                                     <span aria-hidden="true">&laquo; Previous</span>
                                                 </a>
                                             </li>
@@ -294,7 +318,7 @@
                                         </li>
                                         {% if expenses.has_next %}
                                             <li class="page-item">
-                                                <a class="page-link" href="?page={{ expenses.next_page_number }}&category={{ request.GET.category }}&timeframe={{ request.GET.timeframe }}&per_page={{ per_page }}&exact_date={{ request.GET.exact_date }}&start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}" aria-label="Next">
+                                                <a class="page-link" href="?page={{ expenses.next_page_number }}&q={{ search_query|urlencode }}&category={{ request.GET.category }}&timeframe={{ timeframe }}&per_page={{ per_page }}&exact_date={{ request.GET.exact_date }}&start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}&sort={{ sort_by }}&direction={{ sort_direction }}" aria-label="Next">
                                                     <span aria-hidden="true">Next &raquo;</span>
                                                 </a>
                                             </li>
@@ -528,6 +552,8 @@
         const startDateEl = document.getElementById('startDateInput');
         const endDateEl = document.getElementById('endDateInput');
         const perPageEl = document.getElementById('perPageSelect') || document.querySelector('select[name="per_page"]');
+        const sortEl = document.querySelector('#filterForm input[name="sort"]');
+        const directionEl = document.querySelector('#filterForm input[name="direction"]');
 
         params.set('page', page);
 
@@ -538,12 +564,14 @@
         if (startDateEl && startDateEl.value) params.set('start_date', startDateEl.value);
         if (endDateEl && endDateEl.value) params.set('end_date', endDateEl.value);
         if (perPageEl && perPageEl.value) params.set('per_page', perPageEl.value);
+        if (sortEl && sortEl.value) params.set('sort', sortEl.value);
+        if (directionEl && directionEl.value) params.set('direction', directionEl.value);
 
         return params.toString();
     }
 
     // 2. REUSABLE AJAX FETCH: Updates table & chart dynamically
-    function updateTransactionList(queryString) {
+    function updateTransactionList(queryString, updateHistory = false) {
         const url = `?${queryString}`;
 
         fetch(url, {
@@ -560,6 +588,16 @@
             // 1. Update Table HTML content
             if (newTransactionList && currentTransactionList) {
                 currentTransactionList.innerHTML = newTransactionList.innerHTML;
+            }
+
+            const params = new URLSearchParams(queryString);
+            const sortInput = document.querySelector('#filterForm input[name="sort"]');
+            const directionInput = document.querySelector('#filterForm input[name="direction"]');
+            if (sortInput) sortInput.value = params.get('sort') || '';
+            if (directionInput) directionInput.value = params.get('direction') || 'asc';
+
+            if (updateHistory) {
+                window.history.pushState({}, '', `${window.location.pathname}?${queryString}`);
             }
 
             // 2. Update Dynamic Totals Card if it exists
@@ -594,6 +632,20 @@
         })
         .catch(error => console.warn('Error fetching filtered data:', error));
     }
+
+    document.addEventListener('submit', function(event) {
+        const sortForm = event.target.closest('.js-amount-sort-form');
+        if (!sortForm) return;
+
+        event.preventDefault();
+        const params = new URLSearchParams(new FormData(sortForm));
+        params.set('page', '1');
+        updateTransactionList(params.toString(), true);
+    });
+
+    window.addEventListener('popstate', function() {
+        updateTransactionList(window.location.search.slice(1));
+    });
 
     // 3. AUTO-SUBMIT: Triggers reload on filter change
     function triggerFilterUpdate() {

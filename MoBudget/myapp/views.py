@@ -584,7 +584,19 @@ def home(request):
     total = expenses.aggregate(Sum('amount'))['amount__sum'] or 0
     categories = Category.objects.filter(user=request.user)
 
-    expenses_qs = expenses.order_by('-date')
+    sort_by = request.GET.get('sort')
+    sort_direction = request.GET.get('direction', 'asc')
+    if sort_by != 'amount' or sort_direction not in ('asc', 'desc'):
+        sort_by = ''
+        sort_direction = 'asc'
+
+    if sort_by == 'amount':
+        amount_order = 'amount' if sort_direction == 'asc' else '-amount'
+        expenses_qs = expenses.order_by(amount_order, '-date', '-id')
+    else:
+        expenses_qs = expenses.order_by('-date', '-id')
+
+    next_amount_direction = 'desc' if sort_by == 'amount' and sort_direction == 'asc' else 'asc'
 
     # 1. Capture the total count of filtered items BEFORE pagination
     filtered_count = expenses_qs.count()
@@ -638,6 +650,9 @@ def home(request):
         'chart_labels_json': json.dumps(chart_labels),
         'chart_values_json': json.dumps(chart_values),
         'per_page': per_page, # Already an safe integer now!
+        'sort_by': sort_by,
+        'sort_direction': sort_direction,
+        'next_amount_direction': next_amount_direction,
         'form': form,
     }
     return render(request, 'myapp/index.html', context)
