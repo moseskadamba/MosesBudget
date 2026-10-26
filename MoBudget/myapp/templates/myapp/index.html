@@ -120,6 +120,7 @@
                 <div class="col-lg-3 col-md-4">
                     <select name="category" class="form-select border-0 bg-light">
                         <option value="">All Categories</option>
+                        <option value="uncategorized" {% if request.GET.category == 'uncategorized' %}selected{% endif %}>Misc (Uncategorized)</option>
                         {% for cat in categories %}
                             <option value="{{ cat.id }}" {% if request.GET.category == cat.id|stringformat:"i" %}selected{% endif %}>{{ cat.name }}</option>
                         {% endfor %}
@@ -206,7 +207,7 @@
 
                     </div>
                 </div>
-                <div id="transaction-list" data-chart-labels='{{ chart_labels_json|safe }}' data-chart-values='{{ chart_values_json|safe }}'>
+                <div id="transaction-list" data-chart-labels='{{ chart_labels_json|safe }}' data-chart-values='{{ chart_values_json|safe }}' data-chart-category-ids='{{ chart_category_ids_json|safe }}'>
 
                     {% if expenses.object_list %}
 
@@ -473,6 +474,7 @@
             labels: initialLabels,
             datasets: [{
                 data: initialValues,
+                categoryIds: {{ chart_category_ids_json|safe }},
                 backgroundColor: generatePalette(initialLabels.length),
                 borderColor: '#ffffff',
                 borderWidth: 2
@@ -496,6 +498,16 @@
                         dataArr.forEach(data => sum += data);
                         return sum > 0 ? (value * 100 / sum).toFixed(1) + "%" : "0%";
                     }
+                }
+            },
+            onClick: (event, elements, chart) => {
+                if (!elements.length) return;
+
+                const categoryId = chart.data.datasets[0].categoryIds[elements[0].index];
+                const categorySelect = document.querySelector('select[name="category"]');
+                if (categorySelect) {
+                    categorySelect.value = String(categoryId);
+                    triggerFilterUpdate();
                 }
             }
         }
@@ -560,14 +572,17 @@
             if (window.myExpenseChart && newTransactionList) {
                 const rawLabels = newTransactionList.getAttribute('data-chart-labels');
                 const rawValues = newTransactionList.getAttribute('data-chart-values');
+                const rawCategoryIds = newTransactionList.getAttribute('data-chart-category-ids');
 
-                if (rawLabels && rawValues) {
+                if (rawLabels && rawValues && rawCategoryIds) {
                     const labels = JSON.parse(rawLabels);
                     const values = JSON.parse(rawValues);
+                    const categoryIds = JSON.parse(rawCategoryIds);
 
                     // Feed new data to chart
                     window.myExpenseChart.data.labels = labels;
                     window.myExpenseChart.data.datasets[0].data = values;
+                    window.myExpenseChart.data.datasets[0].categoryIds = categoryIds;
 
                     // Recalculate color palette dynamically in case categories changed
                     window.myExpenseChart.data.datasets[0].backgroundColor = generatePalette(labels.length);

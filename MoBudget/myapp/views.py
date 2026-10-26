@@ -522,7 +522,9 @@ def home(request):
 
     now = timezone.now().date()
 
-    if category_id:
+    if category_id == 'uncategorized':
+        expenses = expenses.filter(category__isnull=True)
+    elif category_id:
         expenses = expenses.filter(category_id=category_id)
 
     # Filtering Logic Hierarchy
@@ -563,7 +565,7 @@ def home(request):
     # --- 2. DATA FOR PIE CHART ---
     # Grouping filtered expenses by category name
     chart_data = (
-        expenses.values('category__name')
+        expenses.values('category_id', 'category__name')
         .annotate(total=Sum('amount'))
         .order_by('category__name')
     )
@@ -571,6 +573,7 @@ def home(request):
     # Prepare lists for Chart.js
     chart_labels = [item['category__name'] or 'Misc' for item in chart_data]
     chart_values = [float(item['total']) for item in chart_data]
+    chart_category_ids = [item['category_id'] or 'uncategorized' for item in chart_data]
 
     start_of_week = now - timedelta(days=now.weekday())
     # Sunday is 6 days after Monday
@@ -631,6 +634,7 @@ def home(request):
         'week_total':week_total,
         'chart_labels': chart_labels,
         'chart_values': chart_values,
+        'chart_category_ids_json': json.dumps(chart_category_ids),
         'chart_labels_json': json.dumps(chart_labels),
         'chart_values_json': json.dumps(chart_values),
         'per_page': per_page, # Already an safe integer now!
@@ -693,7 +697,9 @@ def export_expenses_csv(request):
         expenses = expenses.filter(description__icontains=search_query)
 
     # 3. Apply Filters (Matching the home view logic exactly)
-    if category_id:
+    if category_id == 'uncategorized':
+        expenses = expenses.filter(category__isnull=True)
+    elif category_id:
         expenses = expenses.filter(category_id=category_id)
 
     if exact_date:
