@@ -62,3 +62,12 @@ class ExpenseAjaxEditTests(TestCase):
 		self.assertEqual(response.json()['expense']['raw_amount'], '45.50')
 		self.expense.refresh_from_db()
 		self.assertEqual(self.expense.description, 'Dinner')
+
+	def test_edit_button_renders_large_amount_without_grouping_separator(self):
+		self.expense.amount = '1234.56'
+		self.expense.save()
+
+		response = self.client.get(reverse('expenses:home'), {'timeframe': 'all'})
+
+		self.assertContains(response, 'data-amount="1234.56"')
+		self.assertNotContains(response, 'data-amount="1,234.56"')
