@@ -739,10 +739,12 @@
     // Edit Expense Modal configuration
     const editExpenseModal = document.getElementById('editExpenseModal');
     if (editExpenseModal) {
+        const editExpenseForm = editExpenseModal.querySelector('#editExpenseForm');
+
         editExpenseModal.addEventListener('show.bs.modal', function(event) {
             const btn = event.relatedTarget;
 
-            editExpenseModal.querySelector('#editExpenseForm').setAttribute('action', btn.getAttribute('data-url'));
+            editExpenseForm.setAttribute('action', btn.getAttribute('data-url'));
             editExpenseModal.querySelector('#editExpDate').value = btn.getAttribute('data-date');
             editExpenseModal.querySelector('#editExpDescription').value = btn.getAttribute('data-description');
             editExpenseModal.querySelector('#editExpAmount').value = btn.getAttribute('data-amount');
@@ -751,6 +753,50 @@
             const categorySelect = editExpenseModal.querySelector('#editExpCategory');
             if (categorySelect) {
                 categorySelect.value = categoryId;
+            }
+        });
+
+        editExpenseForm.addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const submitButton = editExpenseForm.querySelector('[type="submit"]');
+            const formData = new FormData(editExpenseForm);
+            submitButton.disabled = true;
+
+            try {
+                const response = await fetch(editExpenseForm.action, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                    },
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (!response.ok || data.status !== 'success') {
+                    const errors = Object.values(data.errors || {}).flat().join('\n');
+                    alert(errors || data.message || 'Could not update this expense.');
+                    return;
+                }
+
+                bootstrap.Modal.getOrCreateInstance(editExpenseModal).hide();
+
+                const toastElement = document.getElementById('successToast');
+                const toastMessage = document.getElementById('toastMessage');
+                if (toastElement && toastMessage) {
+                    toastMessage.textContent = data.message;
+                    new bootstrap.Toast(toastElement).show();
+                }
+
+                const activePageText = document.querySelector('#transaction-list .pagination .page-item.active .page-link')?.textContent || '';
+                const activePage = activePageText.match(/Page\s+(\d+)/)?.[1] || '1';
+                updateTransactionList(getActiveFilterParams(activePage));
+            } catch (error) {
+                console.error('Error updating expense:', error);
+                alert('Could not update this expense. Please try again.');
+            } finally {
+                submitButton.disabled = false;
             }
         });
     }

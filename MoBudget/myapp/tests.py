@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Expense
+from .models import Category, Expense
 
 
 class ExpenseAmountSortingTests(TestCase):
@@ -26,3 +26,39 @@ class ExpenseAmountSortingTests(TestCase):
 		self.assertEqual([expense.amount for expense in descending.context['expenses']], [30, 10])
 		self.assertEqual(ascending.context['next_amount_direction'], 'desc')
 		self.assertEqual(descending.context['next_amount_direction'], 'asc')
+
+
+class ExpenseAjaxEditTests(TestCase):
+	def setUp(self):
+		self.user = get_user_model().objects.create_user(username='edit-user', password='test-pass')
+		self.client.force_login(self.user)
+		self.category = Category.objects.create(
+			user=self.user,
+			name='Food',
+		)
+		self.expense = Expense.objects.create(
+			user=self.user,
+			amount='30.00',
+			date=date(2026, 1, 1),
+			description='Lunch',
+			category=self.category,
+		)
+
+	def test_ajax_edit_returns_updated_expense_data(self):
+		response = self.client.post(
+			reverse('expenses:edit_expense_dashboard', args=[self.expense.pk]),
+			{
+				'amount': '45.50',
+				'category': self.category.pk,
+				'date': '2026-01-02',
+				'description': 'Dinner',
+			},
+			HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.json()['status'], 'success')
+		self.assertEqual(response.json()['expense']['description'], 'Dinner')
+		self.assertEqual(response.json()['expense']['raw_amount'], '45.50')
+		self.expense.refresh_from_db()
+		self.assertEqual(self.expense.description, 'Dinner')
