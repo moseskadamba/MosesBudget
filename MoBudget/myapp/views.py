@@ -616,6 +616,8 @@ def home(request):
                 return JsonResponse({'status': 'success', 'message': f"Added {expense.description or 'Expense'}!"})
 
             return redirect('expenses:home')
+        elif request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'status': 'error', 'errors': form.errors.get_json_data()}, status=400)
     else:
         form = ExpenseForm(user=request.user)
 

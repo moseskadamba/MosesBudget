@@ -307,7 +307,7 @@
                             {% endif %}
                             <div class="col-md-3">
                                 <label class="form-label small fw-bold">Items per page</label>
-                                <select name="per_page" class="form-select" form="filterForm" onchange="this.form.submit()">
+                                <select name="per_page" class="form-select" form="filterForm">
                                     <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
                                     <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
                                     <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
@@ -593,11 +593,15 @@
         const exactDateEl = document.getElementById('exactDateInput');
         const startDateEl = document.getElementById('startDateInput');
         const endDateEl = document.getElementById('endDateInput');
-        const perPageEl = document.getElementById('perPageSelect') || document.querySelector('select[name="per_page"]');
-
-        const filterElements = [categoryEl, timeframeEl, exactDateEl, startDateEl, endDateEl, perPageEl];
+        const filterElements = [categoryEl, timeframeEl, exactDateEl, startDateEl, endDateEl];
         filterElements.forEach(element => {
             if (element) element.addEventListener('change', triggerFilterUpdate);
+        });
+
+        document.addEventListener('change', function(event) {
+            if (event.target.matches('select[name="per_page"]')) {
+                triggerFilterUpdate();
+            }
         });
     });
 

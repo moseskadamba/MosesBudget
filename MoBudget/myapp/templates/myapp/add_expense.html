@@ -77,16 +77,25 @@
                 toastMsg.textContent = data.message;
                 new bootstrap.Toast(document.getElementById('successToast')).show();
 
+                updateTransactionList(getActiveFilterParams('1'));
+
                 // 2. Clear the form fields
                 form.reset();
 
                 // 3. Optional: Refocus the first field (Amount)
                 document.querySelector('[name="amount"]').focus();
             } else {
-                alert("Error: " + JSON.stringify(data.errors));
+                const errors = Object.values(data.errors || {})
+                    .flat()
+                    .map(error => error.message)
+                    .filter(Boolean);
+                alert(errors.join('\n') || 'Unable to add this expense.');
             }
         })
-        .catch(error => console.error('Error:', error));
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Unable to add this expense. Please try again.');
+        });
     });
 </script>
 
