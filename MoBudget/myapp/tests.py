@@ -28,6 +28,32 @@ class ExpenseAmountSortingTests(TestCase):
 		self.assertEqual(descending.context['next_amount_direction'], 'asc')
 
 
+class ExpenseMonthYearFilteringTests(TestCase):
+	def setUp(self):
+		self.user = get_user_model().objects.create_user(username='date-filter-user', password='test-pass')
+		self.client.force_login(self.user)
+		Expense.objects.create(user=self.user, amount='30.00', date=date(2026, 2, 1), description='Target month')
+		Expense.objects.create(user=self.user, amount='10.00', date=date(2026, 3, 1), description='Other month')
+		Expense.objects.create(user=self.user, amount='20.00', date=date(2025, 2, 1), description='Other year')
+
+	def test_month_and_year_filter_expenses_together(self):
+		response = self.client.get(reverse('expenses:home'), {'month': '2', 'year': '2026'})
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual([expense.description for expense in response.context['expenses']], ['Target month'])
+		self.assertEqual(response.context['selected_month'], '2')
+		self.assertEqual(response.context['selected_year'], '2026')
+		self.assertContains(response, 'value="2026"')
+		self.assertNotContains(response, '2,026')
+
+	def test_chart_canvas_is_rendered_when_filter_has_no_data(self):
+		response = self.client.get(reverse('expenses:home'), {'month': '1', 'year': '1900'})
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, '<canvas id="expenseChart"></canvas>', html=True)
+		self.assertContains(response, 'id="chart-empty-state"')
+
+
 class ExpenseAjaxEditTests(TestCase):
 	def setUp(self):
 		self.user = get_user_model().objects.create_user(username='edit-user', password='test-pass')

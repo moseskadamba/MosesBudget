@@ -11,6 +11,8 @@
         const q = document.querySelector('input[name="q"]').value;
         const category = document.querySelector('select[name="category"]').value;
         const timeframe = document.querySelector('select[name="timeframe"]').value;
+        const month = document.querySelector('select[name="month"]').value;
+        const year = document.querySelector('select[name="year"]').value;
         const exact_date = document.querySelector('input[name="exact_date"]').value;
         const start_date = document.querySelector('input[name="start_date"]').value;
         const end_date = document.querySelector('input[name="end_date"]').value;
@@ -23,6 +25,8 @@
             q: q,
             category: category,
             timeframe: timeframe,
+            month: month,
+            year: year,
             exact_date: exact_date,
             start_date: start_date,
             end_date: end_date
@@ -139,6 +143,33 @@
                         <option value="year" {% if request.GET.timeframe == 'year' %}selected{% endif %}>This Year</option>
                     </select>
                 </div>
+                <div class="col-lg-2 col-md-3">
+                    <label class="form-label small fw-bold" for="monthSelect">Month</label>
+                    <select name="month" id="monthSelect" class="form-select border-0 bg-light">
+                        <option value="">Any month</option>
+                        <option value="1" {% if selected_month == '1' %}selected{% endif %}>January</option>
+                        <option value="2" {% if selected_month == '2' %}selected{% endif %}>February</option>
+                        <option value="3" {% if selected_month == '3' %}selected{% endif %}>March</option>
+                        <option value="4" {% if selected_month == '4' %}selected{% endif %}>April</option>
+                        <option value="5" {% if selected_month == '5' %}selected{% endif %}>May</option>
+                        <option value="6" {% if selected_month == '6' %}selected{% endif %}>June</option>
+                        <option value="7" {% if selected_month == '7' %}selected{% endif %}>July</option>
+                        <option value="8" {% if selected_month == '8' %}selected{% endif %}>August</option>
+                        <option value="9" {% if selected_month == '9' %}selected{% endif %}>September</option>
+                        <option value="10" {% if selected_month == '10' %}selected{% endif %}>October</option>
+                        <option value="11" {% if selected_month == '11' %}selected{% endif %}>November</option>
+                        <option value="12" {% if selected_month == '12' %}selected{% endif %}>December</option>
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-3">
+                    <label class="form-label small fw-bold" for="yearSelect">Year</label>
+                    <select name="year" id="yearSelect" class="form-select border-0 bg-light">
+                        <option value="">Any year</option>
+                        {% for year_option in year_options %}
+                            <option value="{{ year_option|unlocalize }}" {% if selected_year == year_option|stringformat:"i" %}selected{% endif %}>{{ year_option|unlocalize }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <div class="col-md-2">
                     <label class="form-label small fw-bold">Pick Specific Date</label>
                     <input type="date" name="exact_date" id="exactDateInput" class="form-select" value="{{ request.GET.exact_date }}">
@@ -229,6 +260,8 @@
                                                     <input type="hidden" name="q" value="{{ search_query }}">
                                                     <input type="hidden" name="category" value="{{ request.GET.category }}">
                                                     <input type="hidden" name="timeframe" value="{{ timeframe }}">
+                                                    <input type="hidden" name="month" value="{{ selected_month }}">
+                                                    <input type="hidden" name="year" value="{{ selected_year }}">
                                                     <input type="hidden" name="exact_date" value="{{ request.GET.exact_date }}">
                                                     <input type="hidden" name="start_date" value="{{ request.GET.start_date }}">
                                                     <input type="hidden" name="end_date" value="{{ request.GET.end_date }}">
@@ -303,7 +336,7 @@
                                     <ul class="pagination justify-content-center shadow-sm">
                                         {% if expenses.has_previous %}
                                             <li class="page-item">
-                                                <a class="page-link" href="?page={{ expenses.previous_page_number }}&q={{ search_query|urlencode }}&category={{ request.GET.category }}&timeframe={{ timeframe }}&per_page={{ per_page }}&exact_date={{ request.GET.exact_date }}&start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}&sort={{ sort_by }}&direction={{ sort_direction }}" aria-label="Previous">
+                                                <a class="page-link" href="?page={{ expenses.previous_page_number }}&q={{ search_query|urlencode }}&category={{ request.GET.category }}&timeframe={{ timeframe }}&month={{ selected_month }}&year={{ selected_year }}&per_page={{ per_page }}&exact_date={{ request.GET.exact_date }}&start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}&sort={{ sort_by }}&direction={{ sort_direction }}" aria-label="Previous">
                                                     <span aria-hidden="true">&laquo; Previous</span>
                                                 </a>
                                             </li>
@@ -319,7 +352,7 @@
                                         </li>
                                         {% if expenses.has_next %}
                                             <li class="page-item">
-                                                <a class="page-link" href="?page={{ expenses.next_page_number }}&q={{ search_query|urlencode }}&category={{ request.GET.category }}&timeframe={{ timeframe }}&per_page={{ per_page }}&exact_date={{ request.GET.exact_date }}&start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}&sort={{ sort_by }}&direction={{ sort_direction }}" aria-label="Next">
+                                                <a class="page-link" href="?page={{ expenses.next_page_number }}&q={{ search_query|urlencode }}&category={{ request.GET.category }}&timeframe={{ timeframe }}&month={{ selected_month }}&year={{ selected_year }}&per_page={{ per_page }}&exact_date={{ request.GET.exact_date }}&start_date={{ request.GET.start_date }}&end_date={{ request.GET.end_date }}&sort={{ sort_by }}&direction={{ sort_direction }}" aria-label="Next">
                                                     <span aria-hidden="true">Next &raquo;</span>
                                                 </a>
                                             </li>
@@ -347,15 +380,12 @@
         <div class="col-lg-4 mb-4">
             <div class="table-container shadow-sm text-center">
                 <h5 class="fw-bold mb-4">Spending Analysis</h5>
-                {% if chart_values %}
                 <div style="position: relative; height: 350px; width: 100%;">
                     <canvas id="expenseChart"></canvas>
+                    <p id="chart-empty-state" class="position-absolute top-50 start-50 translate-middle text-muted text-nowrap" {% if chart_values %}hidden{% endif %}>
+                        No data available for the chart.
+                    </p>
                 </div>
-                {% else %}
-                <div class="py-5">
-                    <p class="text-muted">No data available for the chart.</p>
-                </div>
-                {% endif %}
             </div>
         </div>
     </div>
@@ -425,6 +455,8 @@
 
 <script>
     const timeframeSelect = document.getElementById('timeframeSelect');
+    const monthSelect = document.getElementById('monthSelect');
+    const yearSelect = document.getElementById('yearSelect');
     const exactDateInput = document.getElementById('exactDateInput');
     const startDateInput = document.getElementById('startDateInput');
     const endDateInput = document.getElementById('endDateInput');
@@ -445,16 +477,29 @@
     // If user picks a Preset Timeframe, clear all custom dates
     timeframeSelect.addEventListener('change', function() {
         if (this.value !== 'all') {
+            monthSelect.value = '';
+            yearSelect.value = '';
             exactDateInput.value = '';
             startDateInput.value = '';
             endDateInput.value = '';
         }
     });
 
+    [monthSelect, yearSelect].forEach(select => {
+        select.addEventListener('change', function() {
+            timeframeSelect.value = 'all';
+            exactDateInput.value = '';
+            startDateInput.value = '';
+            endDateInput.value = '';
+        });
+    });
+
     // If user picks an Exact Date, clear Timeframe and Ranges
     exactDateInput.addEventListener('change', function() {
         if (this.value !== '') {
             timeframeSelect.value = 'all';
+            monthSelect.value = '';
+            yearSelect.value = '';
             startDateInput.value = '';
             endDateInput.value = '';
         }
@@ -465,6 +510,8 @@
         input.addEventListener('change', function() {
             if (startDateInput.value !== '' || endDateInput.value !== '') {
                 timeframeSelect.value = 'all';
+                monthSelect.value = '';
+                yearSelect.value = '';
                 exactDateInput.value = '';
             }
             validateDates();
@@ -549,6 +596,8 @@
         const searchInput = document.getElementById('searchInput');
         const categoryEl = document.getElementById('filterCategory') || document.querySelector('select[name="category"]');
         const timeframeEl = document.getElementById('timeframeSelect') || document.querySelector('select[name="timeframe"]');
+        const monthEl = document.getElementById('monthSelect');
+        const yearEl = document.getElementById('yearSelect');
         const exactDateEl = document.getElementById('exactDateInput');
         const startDateEl = document.getElementById('startDateInput');
         const endDateEl = document.getElementById('endDateInput');
@@ -561,6 +610,8 @@
         if (searchInput && searchInput.value) params.set('q', searchInput.value);
         if (categoryEl && categoryEl.value) params.set('category', categoryEl.value);
         if (timeframeEl && timeframeEl.value) params.set('timeframe', timeframeEl.value);
+        if (monthEl && monthEl.value) params.set('month', monthEl.value);
+        if (yearEl && yearEl.value) params.set('year', yearEl.value);
         if (exactDateEl && exactDateEl.value) params.set('exact_date', exactDateEl.value);
         if (startDateEl && startDateEl.value) params.set('start_date', startDateEl.value);
         if (endDateEl && endDateEl.value) params.set('end_date', endDateEl.value);
@@ -617,6 +668,11 @@
                     const labels = JSON.parse(rawLabels);
                     const values = JSON.parse(rawValues);
                     const categoryIds = JSON.parse(rawCategoryIds);
+                    const chartEmptyState = document.getElementById('chart-empty-state');
+
+                    if (chartEmptyState) {
+                        chartEmptyState.hidden = labels.length > 0;
+                    }
 
                     // Feed new data to chart
                     window.myExpenseChart.data.labels = labels;
@@ -658,10 +714,12 @@
     document.addEventListener('DOMContentLoaded', function() {
         const categoryEl = document.getElementById('filterCategory') || document.querySelector('select[name="category"]');
         const timeframeEl = document.getElementById('timeframeSelect') || document.querySelector('select[name="timeframe"]');
+        const monthEl = document.getElementById('monthSelect');
+        const yearEl = document.getElementById('yearSelect');
         const exactDateEl = document.getElementById('exactDateInput');
         const startDateEl = document.getElementById('startDateInput');
         const endDateEl = document.getElementById('endDateInput');
-        const filterElements = [categoryEl, timeframeEl, exactDateEl, startDateEl, endDateEl];
+        const filterElements = [categoryEl, timeframeEl, monthEl, yearEl, exactDateEl, startDateEl, endDateEl];
         filterElements.forEach(element => {
             if (element) element.addEventListener('change', triggerFilterUpdate);
         });

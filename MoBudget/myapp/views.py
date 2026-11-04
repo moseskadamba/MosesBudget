@@ -500,6 +500,22 @@ def home(request):
     # --- 1. APPLY FILTERS ---
     category_id = request.GET.get('category')
     timeframe = request.GET.get('timeframe')
+    month = request.GET.get('month', '')
+    year = request.GET.get('year', '')
+
+    try:
+        month_number = int(month)
+        if not 1 <= month_number <= 12:
+            month = ''
+    except (TypeError, ValueError):
+        month = ''
+
+    try:
+        year_number = int(year)
+        if year_number < 1:
+            year = ''
+    except (TypeError, ValueError):
+        year = ''
 
     exact_date = request.GET.get('exact_date')
     start_date = request.GET.get('start_date')
@@ -510,6 +526,8 @@ def home(request):
         request.GET.get('q'),
         category_id,
         timeframe,
+        month,
+        year,
         exact_date,
         start_date,
         end_date,
@@ -536,6 +554,11 @@ def home(request):
         else:
             from django.contrib import messages
             messages.error(request, "Invalid date range selected.")
+    elif month or year:
+        if month:
+            expenses = expenses.filter(date__month=int(month))
+        if year:
+            expenses = expenses.filter(date__year=int(year))
     elif timeframe and timeframe != 'all':
         if timeframe == 'today':
             expenses = expenses.filter(date=now)
@@ -640,6 +663,12 @@ def home(request):
         'expenses': page_obj,  # We pass the page object instead of the queryset
         'search_query': search_query,
         'timeframe': timeframe,
+        'selected_month': month,
+        'selected_year': year,
+        'year_options': sorted(
+            {expense_date.year for expense_date in Expense.objects.filter(user=request.user).dates('date', 'year', order='DESC')} | {now.year},
+            reverse=True,
+        ),
         'count': filtered_count,
         'categories': categories,
         'total': total,
@@ -701,6 +730,8 @@ def export_expenses_csv(request):
     search_query = request.GET.get('q')
     category_id = request.GET.get('category')
     timeframe = request.GET.get('timeframe')
+    month = request.GET.get('month', '')
+    year = request.GET.get('year', '')
     exact_date = request.GET.get('exact_date')
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
@@ -717,10 +748,29 @@ def export_expenses_csv(request):
     elif category_id:
         expenses = expenses.filter(category_id=category_id)
 
+    try:
+        month_number = int(month)
+        if not 1 <= month_number <= 12:
+            month_number = None
+    except (TypeError, ValueError):
+        month_number = None
+
+    try:
+        year_number = int(year)
+        if year_number < 1:
+            year_number = None
+    except (TypeError, ValueError):
+        year_number = None
+
     if exact_date:
         expenses = expenses.filter(date=exact_date)
     elif start_date and end_date:
         expenses = expenses.filter(date__range=[start_date, end_date])
+    elif month_number or year_number:
+        if month_number:
+            expenses = expenses.filter(date__month=month_number)
+        if year_number:
+            expenses = expenses.filter(date__year=year_number)
     elif timeframe:
         if timeframe == 'today':
             expenses = expenses.filter(date=now.date())
@@ -741,7 +791,7 @@ def export_expenses_csv(request):
     # 4. Generate CSV Response
     response = HttpResponse(content_type='text/csv')
     # Dynamic filename based on filters
-    export_label = timeframe or exact_date or f"{start_date}_to_{end_date}" or "all"
+    export_label = f"{year_number or 'all-years'}_{month_number or 'all-months'}" if month_number or year_number else timeframe or exact_date or f"{start_date}_to_{end_date}" or "all"
     response['Content-Disposition'] = f'attachment; filename="expenses_{export_label}.csv"'
 
     writer = csv.writer(response)
