@@ -1,5 +1,5 @@
 .env
-__pycache__/
+MoBudget/__pycache__/
 *.py[cod]
 myenv/
 db.sqlite3
