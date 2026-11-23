@@ -18,7 +18,14 @@ import environ
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env()
-environ.Env.read_env(BASE_DIR / '.env')
+
+env_file = BASE_DIR / '.env'
+if env_file.exists():
+    environ.Env.read_env(env_file)
+else:
+    env_txt = BASE_DIR / 'env.txt'
+    if env_txt.exists():
+        environ.Env.read_env(env_txt)
 
 
 # Quick-start development settings - unsuitable for production
@@ -28,9 +35,9 @@ environ.Env.read_env(BASE_DIR / '.env')
 SECRET_KEY = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env.bool('DEBUG', default=False)
+DEBUG = env.bool('DEBUG', default=True)
 
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost'])
+ALLOWED_HOSTS = [host.strip() for host in env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1']) if host.strip()]
 
 
 # Application definition
